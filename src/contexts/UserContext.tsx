@@ -22,7 +22,10 @@ export function UserProvider({ children }: UserProviderProps) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    authenticateUser();
+    const timer = setTimeout(() => {
+      authenticateUser();
+    }, 500);
+    return () => clearTimeout(timer);
   }, []);
 
   const authenticateUser = async () => {
