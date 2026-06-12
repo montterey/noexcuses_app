@@ -30,6 +30,12 @@ export function UserProvider({ children }: UserProviderProps) {
       setLoading(true);
       setError(null);
 
+      // Debug: Log Telegram WebApp data
+      console.log('Telegram WebApp:', window.Telegram?.WebApp);
+      console.log('initData:', window.Telegram?.WebApp?.initData);
+      console.log('initDataUnsafe:', window.Telegram?.WebApp?.initDataUnsafe);
+      console.log('user:', window.Telegram?.WebApp?.initDataUnsafe?.user);
+
       // Get Telegram user from WebApp SDK
       const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
 
