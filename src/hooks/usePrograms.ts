@@ -106,14 +106,15 @@ export function usePrograms() {
 
     try {
       await supabase
-        .from('user_programs')
-        .upsert({
-          user_id: user.id,
-          program_code: programCode,
-          current_day: 1,
-          active: true,
-          completed: false,
-        }, { onConflict: 'user_id,program_code' });
+  .from('user_programs')
+  .upsert({
+    user_id: user.id,
+    program_code: programCode,
+    current_day: 1,
+    active: true,
+    completed: false,
+    start_date: new Date().toISOString().split('T')[0],
+  }, { onConflict: 'user_id,program_code' });
 
       await fetchPrograms();
     } catch (error) {
