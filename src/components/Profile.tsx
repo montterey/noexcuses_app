@@ -134,4 +134,62 @@ export function Profile({ user, achievements }: ProfileProps) {
                   {achievement.title}
                 </p>
                 {achievement.unlocked && achievement.unlockedAt && (
-                  <p className="text-[10px]
+                  <p className="text-[10px] text-gray-500 mt-1">{achievement.unlockedAt}</p>
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Модалка достижения */}
+      {selectedAchievement && (
+        <div
+          className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center"
+          onClick={() => setSelectedAchievement(null)}
+        >
+          <div
+            className="w-full max-w-[430px] bg-dark-400 rounded-t-3xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={() => setSelectedAchievement(null)}
+                className="w-8 h-8 rounded-full bg-surface flex items-center justify-center"
+              >
+                <X size={16} className="text-gray-400" />
+              </button>
+            </div>
+
+            <div className="text-center mb-6">
+              <div
+                className={`w-20 h-20 mx-auto rounded-2xl flex items-center justify-center text-4xl mb-4 ${
+                  selectedAchievement.unlocked ? 'bg-accent/20' : 'bg-surface-light'
+                }`}
+              >
+                {selectedAchievement.icon}
+              </div>
+              <h2 className="text-xl font-bold mb-2">{selectedAchievement.title}</h2>
+              <p className="text-gray-400 text-sm">{selectedAchievement.description}</p>
+            </div>
+
+            <div className={`rounded-xl p-4 text-center ${
+              selectedAchievement.unlocked ? 'bg-accent/10 border border-accent/30' : 'bg-surface'
+            }`}>
+              {selectedAchievement.unlocked ? (
+                <div>
+                  <p className="text-accent font-semibold">✅ Открыто</p>
+                  {selectedAchievement.unlockedAt && (
+                    <p className="text-gray-400 text-sm mt-1">{selectedAchievement.unlockedAt}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-gray-400 text-sm">🔒 Ещё не открыто</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
