@@ -14,7 +14,6 @@ export function useStats() {
     try {
       setLoading(true);
 
-      // Get the start of current week (Monday)
       const now = new Date();
       const dayOfWeek = now.getDay();
       const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -22,16 +21,14 @@ export function useStats() {
       weekStart.setDate(now.getDate() + mondayOffset);
       weekStart.setHours(0, 0, 0, 0);
 
-      // Fetch all goal logs for this week
       const { data: logs, error } = await supabase
         .from('goal_logs')
-        .select('completed_at')
+        .select('date')
         .eq('user_id', user.id)
-        .gte('completed_at', weekStart.toISOString().split('T')[0]);
+        .gte('date', weekStart.toISOString().split('T')[0]);
 
       if (error) throw error;
 
-      // Count completions per day
       const dayNames = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
       const stats: WeeklyStats[] = [];
 
@@ -42,13 +39,13 @@ export function useStats() {
         const dayIndex = dayDate.getDay();
 
         const completed = (logs || []).filter(
-          (log) => log.completed_at === dateStr
+          (log) => log.date === dateStr
         ).length;
 
         stats.push({
           day: dayNames[dayIndex],
           completed,
-          total: 5, // Placeholder - we don't track total daily goals
+          total: 5,
         });
       }
 
