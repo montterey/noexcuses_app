@@ -14,7 +14,7 @@ import { useStats } from './hooks/useStats';
 function AppContent() {
   const { user, loading: userLoading, error, updateUser, refreshUser } = useUser();
   const { goals, toggleGoal, addGoal } = useGoals();
-  const { programs, startOrContinueProgram } = usePrograms();
+  const { programs, startOrContinueProgram, startNewProgram } = usePrograms();
   const { achievements } = useAchievements();
   const { weeklyStats } = useStats();
 
@@ -27,6 +27,10 @@ function AppContent() {
       await refreshUser();
     }
   };
+
+  const handleStartNewProgram = async (code: 'fitness' | 'weight_loss' | 'study') => {
+  await startNewProgram(code);
+};
 
   const handleAddGoal = async (newGoal: {
     title: string;
@@ -75,7 +79,7 @@ function AppContent() {
       case 'goals':
         return <Goals goals={goals} onGoalToggle={handleGoalToggle} onAddGoal={handleAddGoal} />;
       case 'programs':
-        return <Programs programs={programs} onStartProgram={handleStartProgram} />;
+        return <Programs programs={programs} onStartProgram={handleStartProgram} onStartNewProgram={handleStartNewProgram} />;
       case 'stats':
         return <Stats user={user!} weeklyStats={weeklyStats} />;
       case 'profile':
