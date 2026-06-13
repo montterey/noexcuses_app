@@ -124,18 +124,18 @@ export function Dashboard({ user, goals, onGoalToggle, onAddGoal }: DashboardPro
               <button
                 key={goal.id}
                 onClick={() => onGoalToggle(goal.id)}
-                className="w-full flex items-center gap-3 p-4 bg-surface rounded-xl border border-white/5 hover:border-white/10 transition-all active:scale-[0.98]"
+                className="w-full flex items-center gap-3 p-4 bg-surface rounded-xl border border-white/5 hover:border-white/10 transition-all active:scale-[0.98] touch-manipulation"
               >
                 <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all pointer-events-none ${
                     goal.completedToday
                       ? 'bg-accent border-accent'
-                      : 'border-gray-600 hover:border-gray-500'
+                      : 'border-gray-600'
                   }`}
                 >
-                  {goal.completedToday && <CheckCircle2 size={16} className="text-white" />}
+                  {goal.completedToday && <CheckCircle2 size={16} className="text-white pointer-events-none" />}
                 </div>
-                <div className="flex-1 text-left">
+                <div className="flex-1 text-left pointer-events-none">
                   <p className={`font-medium ${goal.completedToday ? 'text-gray-500 line-through' : ''}`}>
                     {goal.title}
                   </p>
@@ -147,7 +147,7 @@ export function Dashboard({ user, goals, onGoalToggle, onAddGoal }: DashboardPro
                   )}
                 </div>
                 {goal.streak > 0 && (
-                  <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/10 rounded-full">
+                  <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/10 rounded-full pointer-events-none">
                     <Flame size={12} className="text-orange-400" />
                     <span className="text-xs text-orange-400 font-medium">{goal.streak}</span>
                   </div>
