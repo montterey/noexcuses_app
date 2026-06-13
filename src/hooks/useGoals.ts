@@ -83,7 +83,7 @@ export function useGoals() {
           return {
             id: goal.id,
             title: goal.title,
-            type: goal.type,
+            type: goal.frequency,
             time: goal.time,
             why: goal.why,
             streak,
@@ -152,10 +152,9 @@ export function useGoals() {
       await supabase.from('goals').insert({
         user_id: user.id,
         title: newGoal.title,
-        type: newGoal.type,
+        frequency: newGoal.type,
         time: newGoal.time || null,
         why: newGoal.why || null,
-        streak: 0,
         active: true,
       });
 
