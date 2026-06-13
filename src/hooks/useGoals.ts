@@ -42,7 +42,7 @@ export function useGoals() {
           // Count consecutive days completed
           const { data: logs } = await supabase
             .from('goal_logs')
-            .select('completed_at')
+            .select('date')
             .eq('goal_id', goal.id)
             .order('completed_at', { ascending: false })
             .limit(365);
@@ -53,7 +53,7 @@ export function useGoals() {
 
           if (logs && logs.length > 0) {
             const logDates = logs.map((l) => {
-              const d = new Date(l.completed_at);
+              const d = new Date(l.date);
               d.setHours(0, 0, 0, 0);
               return d.getTime();
             });
@@ -122,14 +122,14 @@ export function useGoals() {
           .delete()
           .eq('goal_id', goalId)
           .eq('user_id', user.id)
-          .eq('completed_at', today);
+          .eq('date', today);
       } else {
         // Add completion for today
         await supabase.from('goal_logs').insert({
           goal_id: goalId,
           user_id: user.id,
           status: 'done',
-          completed_at: today,
+          date: today,
         });
       }
 
