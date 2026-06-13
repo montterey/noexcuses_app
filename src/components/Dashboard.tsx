@@ -120,10 +120,15 @@ export function Dashboard({ user, goals, onGoalToggle, onAddGoal }: DashboardPro
           </div>
         ) : (
           <div className="space-y-2">
-            {todayGoals.map((goal) => (
+            {todayGoals.map((goal) => {
+                console.log('goal item rendered', goal.id);
+                return (
               <button
                 key={goal.id}
-                onClick={() => onGoalToggle(goal.id)}
+                onClick={() => {
+                  console.log('toggleGoal called', goal.id);
+                  onGoalToggle(goal.id);
+                }}
                 className="w-full flex items-center gap-3 p-4 bg-surface rounded-xl border border-white/5 hover:border-white/10 transition-all active:scale-[0.98] touch-manipulation cursor-pointer"
               >
                 <div
@@ -153,10 +158,11 @@ export function Dashboard({ user, goals, onGoalToggle, onAddGoal }: DashboardPro
                   </div>
                 )}
               </button>
-            ))}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
       <button
         onClick={() => setShowModal(true)}
