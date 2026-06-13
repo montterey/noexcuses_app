@@ -129,10 +129,17 @@ export function useGoals() {
     // Начисляем +10 XP
     const newXp = (user.xp || 0) + 10;
     const newLevel = Math.floor(newXp / 150) + 1;
-    await supabase
+   await supabase
       .from('users')
       .update({ xp: newXp, level: newLevel })
       .eq('id', user.id);
+
+    // Проверяем достижения
+    await supabase.rpc('check_and_unlock_achievements', {
+      p_user_id: user.id
+    });
+
+    await fetchGoals();
 
     await fetchGoals();
   } catch (error) {
