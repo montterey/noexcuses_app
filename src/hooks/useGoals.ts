@@ -30,7 +30,7 @@ export function useGoals() {
         .from('goal_logs')
         .select('goal_id')
         .eq('user_id', user.id)
-        .eq(.eq('date', today););
+        .eq('date', today);
 
       if (logsError) throw logsError;
 
