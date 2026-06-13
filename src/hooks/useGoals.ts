@@ -139,6 +139,11 @@ export function useGoals() {
       p_user_id: user.id
     });
 
+    // Обновляем streak
+await supabase.rpc('update_user_streak', {
+  p_user_id: user.id
+});
+
     await fetchGoals();
 
     await fetchGoals();
