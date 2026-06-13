@@ -50,3 +50,8 @@ export function useAchievements() {
   }, [user]);
 
   useEffect(() => {
+    fetchAchievements();
+  }, [fetchAchievements]);
+
+  return { achievements, loading, refreshAchievements: fetchAchievements };
+}
