@@ -30,7 +30,7 @@ export function useGoals() {
         .from('goal_logs')
         .select('goal_id')
         .eq('user_id', user.id)
-        .eq('completed_at', today);
+        .eq(.eq('date', today););
 
       if (logsError) throw logsError;
 
@@ -44,7 +44,7 @@ export function useGoals() {
             .from('goal_logs')
             .select('date')
             .eq('goal_id', goal.id)
-            .order('completed_at', { ascending: false })
+            .order('date', { ascending: false })
             .limit(365);
 
           let streak = 0;
