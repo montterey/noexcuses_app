@@ -14,7 +14,6 @@ export function useAchievements() {
     try {
       setLoading(true);
 
-      // Fetch all achievement definitions
       const { data: definitions, error: defError } = await supabase
         .from('achievement_definitions')
         .select('*')
@@ -22,7 +21,6 @@ export function useAchievements() {
 
       if (defError) throw defError;
 
-      // Fetch user's unlocked achievements
       const { data: userAchievements, error: uaError } = await supabase
         .from('user_achievements')
         .select('achievement_id, unlocked_at')
@@ -36,12 +34,12 @@ export function useAchievements() {
 
       setAchievements(
         (definitions || []).map((d) => ({
-          id: d.id,
-          title: d.title,
-          description: d.description || '',
+          id: d.code,
+          title: d.title_ru,
+          description: d.description_ru || '',
           icon: d.icon || '🏆',
-          unlocked: unlockedMap.has(d.id),
-          unlockedAt: unlockedMap.get(d.id)?.split('T')[0],
+          unlocked: unlockedMap.has(d.code),
+          unlockedAt: unlockedMap.get(d.code)?.split('T')[0],
         }))
       );
     } catch (error) {
@@ -52,8 +50,3 @@ export function useAchievements() {
   }, [user]);
 
   useEffect(() => {
-    fetchAchievements();
-  }, [fetchAchievements]);
-
-  return { achievements, loading, refreshAchievements: fetchAchievements };
-}
