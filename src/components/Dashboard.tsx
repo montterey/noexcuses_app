@@ -124,7 +124,7 @@ export function Dashboard({ user, goals, onGoalToggle, onAddGoal }: DashboardPro
               <button
                 key={goal.id}
                 onClick={() => onGoalToggle(goal.id)}
-                className="w-full flex items-center gap-3 p-4 bg-surface rounded-xl border border-white/5 hover:border-white/10 transition-all active:scale-[0.98] touch-manipulation"
+                className="w-full flex items-center gap-3 p-4 bg-surface rounded-xl border border-white/5 hover:border-white/10 transition-all active:scale-[0.98] touch-manipulation cursor-pointer"
               >
                 <div
                   className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all pointer-events-none ${
