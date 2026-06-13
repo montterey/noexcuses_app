@@ -107,38 +107,38 @@ export function useGoals() {
   }, [fetchGoals]);
 
   const toggleGoal = async (goalId: string) => {
-    if (!user) return;
+  if (!user) return;
 
-    const goal = goals.find((g) => g.id === goalId);
-    if (!goal) return;
+  const goal = goals.find((g) => g.id === goalId);
+  if (!goal) return;
 
-    const today = new Date().toISOString().split('T')[0];
+  // Если уже выполнено — ничего не делаем
+  if (goal.completedToday) return;
 
-    try {
-      if (goal.completedToday) {
-        // Remove completion for today
-        await supabase
-          .from('goal_logs')
-          .delete()
-          .eq('goal_id', goalId)
-          .eq('user_id', user.id)
-          .eq('date', today);
-      } else {
-        // Add completion for today
-        await supabase.from('goal_logs').insert({
-          goal_id: goalId,
-          user_id: user.id,
-          status: 'done',
-          date: today,
-        });
-      }
+  const today = new Date().toISOString().split('T')[0];
 
-      // Refresh goals to get updated streaks
-      await fetchGoals();
-    } catch (error) {
-      console.error('Error toggling goal:', error);
-    }
-  };
+  try {
+    // Добавляем выполнение
+    await supabase.from('goal_logs').insert({
+      goal_id: goalId,
+      user_id: user.id,
+      status: 'done',
+      date: today,
+    });
+
+    // Начисляем +10 XP
+    const newXp = (user.xp || 0) + 10;
+    const newLevel = Math.floor(newXp / 150) + 1;
+    await supabase
+      .from('users')
+      .update({ xp: newXp, level: newLevel })
+      .eq('id', user.id);
+
+    await fetchGoals();
+  } catch (error) {
+    console.error('Error toggling goal:', error);
+  }
+};
 
   const addGoal = async (newGoal: {
     title: string;
