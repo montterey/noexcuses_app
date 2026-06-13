@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings, Trophy, Globe, Bell, ChevronRight, Lock } from 'lucide-react';
+import { Settings, Trophy, Globe, Bell, ChevronRight, X } from 'lucide-react';
 import { User, Achievement } from '../types';
 
 interface ProfileProps {
@@ -13,6 +13,8 @@ function getRequiredXp(level: number): number {
 
 export function Profile({ user, achievements }: ProfileProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'achievements'>('profile');
+  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
+
   const settings = {
     language: 'RU',
     notificationTime: '09:00',
@@ -114,10 +116,11 @@ export function Profile({ user, achievements }: ProfileProps) {
 
           <div className="grid grid-cols-3 gap-3">
             {achievements.map((achievement) => (
-              <div
+              <button
                 key={achievement.id}
-                className={`bg-surface rounded-xl p-3 border border-white/5 text-center ${
-                  !achievement.unlocked ? 'opacity-50' : ''
+                onClick={() => setSelectedAchievement(achievement)}
+                className={`bg-surface rounded-xl p-3 border border-white/5 text-center transition-all active:scale-95 ${
+                  !achievement.unlocked ? 'opacity-50' : 'border-accent/30'
                 }`}
               >
                 <div
@@ -125,19 +128,10 @@ export function Profile({ user, achievements }: ProfileProps) {
                     achievement.unlocked ? 'bg-accent/20' : 'bg-surface-light'
                   }`}
                 >
-                  {achievement.unlocked ? achievement.icon : <Lock size={20} className="text-gray-500" />}
+                  {achievement.icon}
                 </div>
                 <p className={`text-xs font-medium ${achievement.unlocked ? '' : 'text-gray-500'}`}>
                   {achievement.title}
                 </p>
                 {achievement.unlocked && achievement.unlockedAt && (
-                  <p className="text-[10px] text-gray-500 mt-1">{achievement.unlockedAt}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
+                  <p className="text-[10px]
