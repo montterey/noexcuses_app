@@ -2,6 +2,74 @@ import { X, Play, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
+function ExerciseTimer({ seconds, onComplete }: { seconds: number; onComplete: () => void }) {
+  const [timeLeft, setTimeLeft] = useState(seconds);
+  const [running, setRunning] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const start = () => {
+    setRunning(true);
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setRunning(false);
+          setDone(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const percentage = ((seconds - timeLeft) / seconds) * 100;
+
+  return (
+    <div className="bg-surface rounded-xl p-4 border border-white/5 mb-4">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-medium flex items-center gap-2">
+          ⏱ Таймер упражнения
+        </p>
+        {done && <span className="text-green-400 text-sm font-medium">✅ Готово!</span>}
+      </div>
+
+      <div className="flex items-center gap-4">
+        <div className="w-16 h-16 rounded-full border-4 border-accent flex items-center justify-center relative">
+          <span className="text-xl font-bold text-accent">{timeLeft}</span>
+        </div>
+
+        <div className="flex-1">
+          <div className="h-2 bg-dark-300 rounded-full overflow-hidden mb-2">
+            <div
+              className="h-full bg-accent rounded-full transition-all duration-1000"
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+          {!running && !done && (
+            <button
+              onClick={start}
+              className="w-full py-2 bg-accent rounded-lg text-white text-sm font-medium active:scale-95 transition-all"
+            >
+              ▶ Запустить {seconds} сек
+            </button>
+          )}
+          {running && (
+            <p className="text-center text-gray-400 text-sm">Держи позицию...</p>
+          )}
+          {done && (
+            <button
+              onClick={() => { setTimeLeft(seconds); setDone(false); }}
+              className="w-full py-2 bg-surface-light rounded-lg text-gray-400 text-sm font-medium"
+            >
+              🔄 Повторить
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface Exercise {
   name: string;
   sets: number;
