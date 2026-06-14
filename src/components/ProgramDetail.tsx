@@ -54,7 +54,7 @@ function ExerciseTimer({ seconds, onComplete }: { seconds: number; onComplete: (
             </button>
           )}
           {running && (
-            <p className="text-center text-gray-400 text-sm">Держи позицию...</p>
+            <p className="text-center text-gray-400 text-sm">Делай!...</p>
           )}
           {done && (
             <button
@@ -317,8 +317,15 @@ export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, o
           )}
 
           {/* Таймер для упражнений на время */}
-          {typeof currentExercise.reps === 'string' && currentExercise.reps.includes('сек') && (
-            <ExerciseTimer seconds={parseInt(currentExercise.reps)} onComplete={completeExercise} />
+          {typeof currentExercise.reps === 'string' && (currentExercise.reps.includes('сек') || currentExercise.reps.includes('мин')) && (
+            <ExerciseTimer 
+              seconds={
+                currentExercise.reps.includes('мин') 
+                  ? parseInt(currentExercise.reps) * 60 
+                  : parseInt(currentExercise.reps)
+              } 
+              onComplete={completeExercise} 
+            />
           )}
 
           {/* Кнопка выполнил */}
