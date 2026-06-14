@@ -18,16 +18,22 @@ const ALL_PROGRAMS = [
     icon: '🏋️',
   },
   {
-    code: 'weight_loss' as const,
-    title: '30-дневное похудение',
-    description: 'Кардио и правильное питание каждый день',
-    icon: '🔥',
+    code: 'running' as const,
+    title: '30 дней бега',
+    description: 'От первого километра до 5 км без остановок',
+    icon: '🏃',
   },
   {
-    code: 'study' as const,
-    title: '30-дневный челлендж учёбы',
-    description: 'Учись каждый день и прокачай знания',
-    icon: '📚',
+    code: 'sleep' as const,
+    title: '30 дней качественного сна',
+    description: 'Режим, ритуалы и глубокий восстанавливающий сон',
+    icon: '💤',
+  },
+  {
+    code: 'reading' as const,
+    title: '30 дней чтения',
+    description: 'Читай каждый день и прочитай книгу за месяц',
+    icon: '📖',
   },
 ];
 
