@@ -74,6 +74,7 @@ interface Exercise {
   name: string;
   sets: number;
   reps: string | number;
+  type?: 'exercise' | 'task';
 }
 
 interface DayContent {
@@ -297,8 +298,12 @@ export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, o
           {/* Название и повторения */}
           <div className="text-center mb-4">
             <h2 className="text-2xl font-bold mb-1">{currentExercise.name}</h2>
-            <p className="text-4xl font-bold text-accent">{currentExercise.reps}</p>
-            <p className="text-gray-400 text-sm mt-1">повторений</p>
+            {currentExercise.type !== 'task' && (
+              <>
+                <p className="text-4xl font-bold text-accent">{currentExercise.reps}</p>
+                <p className="text-gray-400 text-sm mt-1">повторений</p>
+              </>
+            )}
           </div>
 
           {/* Советы */}
@@ -317,7 +322,7 @@ export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, o
           )}
 
           {/* Таймер для упражнений на время */}
-          {typeof currentExercise.reps === 'string' && (currentExercise.reps.includes('сек') || currentExercise.reps.includes('мин')) && (
+          {currentExercise.type !== 'task' && typeof currentExercise.reps === 'string' && (currentExercise.reps.includes('сек') || currentExercise.reps.includes('мин')) && (
             <ExerciseTimer 
               seconds={
                 currentExercise.reps.includes('мин') 
@@ -327,7 +332,6 @@ export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, o
               onComplete={completeExercise} 
             />
           )}
-
           {/* Кнопка выполнил */}
           <button
             onClick={completeExercise}
