@@ -248,6 +248,11 @@ export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, o
             </div>
           )}
 
+          {/* Таймер для упражнений на время */}
+          {typeof currentExercise.reps === 'string' && currentExercise.reps.includes('сек') && (
+            <ExerciseTimer seconds={parseInt(currentExercise.reps)} onComplete={completeExercise} />
+          )}
+
           {/* Кнопка выполнил */}
           <button
             onClick={completeExercise}
@@ -255,7 +260,7 @@ export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, o
           >
             ✅ Выполнил!
           </button>
-
+          
           {/* Следующее */}
           {nextExercise && (
             <p className="text-center text-gray-500 text-sm mt-3">
