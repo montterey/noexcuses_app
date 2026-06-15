@@ -194,13 +194,12 @@ export function ProgramDetail({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [exerciseInfo, setExerciseInfo] = useState<any>(null);
   const [restTimer, setRestTimer] = useState(60);
-  const [restInterval, setRestInterval] = useState<any>(null);
+  const [restInterval, setRestInterval] = useState<ReturnType<typeof setInterval> | null>(null);
 
   const queue = dayContent ? buildWorkoutQueue(dayContent.exercises) : [];
   const currentExercise = queue[currentIndex];
   const nextExercise = queue[currentIndex + 1];
-  const progress =
-    queue.length > 0 ? (currentIndex / queue.length) * 100 : 0;
+  const progress = queue.length > 0 ? (currentIndex / queue.length) * 100 : 0;
 
   const loadExerciseInfo = async (name?: string) => {
     if (!name) {
@@ -347,19 +346,16 @@ export function ProgramDetail({
 
                   <div className="text-right shrink-0">
                     {isTask ? (
-                      <>
-                        <p className="text-blue-400 font-semibold text-sm">
-                          Задание
-                        </p>
-                        <p className="text-gray-500 text-xs">без подходов</p>
-                      </>
+                      <p className="text-blue-400 font-semibold text-sm">
+                        Задание
+                      </p>
                     ) : (
                       <>
                         <p className="text-accent font-semibold">
                           {exercise.reps}
                         </p>
                         <p className="text-gray-500 text-xs">
-                          {exercise.sets || 1} подх.
+                          ×{exercise.sets || 1}
                         </p>
                       </>
                     )}
