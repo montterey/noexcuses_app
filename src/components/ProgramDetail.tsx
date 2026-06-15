@@ -252,8 +252,10 @@ export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, o
     );
   }
 
-  // УПРАЖНЕНИЕ
+ // УПРАЖНЕНИЕ
   if (mode === 'exercise' && currentExercise) {
+    const isTask = currentExercise.type === 'task';
+
     return (
       <div className="fixed inset-0 bg-dark z-50 overflow-y-auto">
         <div className="max-w-[430px] mx-auto p-4 pb-8">
@@ -270,15 +272,21 @@ export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, o
             <div className="h-full bg-accent rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
 
-          {/* Подход */}
-          <div className="text-center mb-4">
-            <span className="text-xs text-gray-500 bg-surface px-3 py-1 rounded-full">
-              Подход {currentExercise.setNumber} из {currentExercise.totalSets}
-            </span>
-          </div>
+          {/* Подход — только для упражнений */}
+          {!isTask && (
+            <div className="text-center mb-4">
+              <span className="text-xs text-gray-500 bg-surface px-3 py-1 rounded-full">
+                Подход {currentExercise.setNumber} из {currentExercise.totalSets}
+              </span>
+            </div>
+          )}
 
-          {/* Видео */}
-          {exerciseInfo?.youtube_id ? (
+          {/* Иконка для task */}
+          {isTask ? (
+            <div className="rounded-2xl bg-surface border border-white/5 mb-4 flex items-center justify-center" style={{ aspectRatio: '16/9' }}>
+              <p className="text-6xl">✅</p>
+            </div>
+          ) : exerciseInfo?.youtube_id ? (
             <div className="rounded-2xl overflow-hidden mb-4 bg-black" style={{ aspectRatio: '16/9' }}>
               <iframe
                 width="100%"
@@ -295,51 +303,54 @@ export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, o
             </div>
           )}
 
-          {/* Название и повторения */}
+          {/* Название */}
           <div className="text-center mb-4">
             <h2 className="text-2xl font-bold mb-1">{currentExercise.name}</h2>
-            {currentExercise.type !== 'task' && (
+            {!isTask && (
               <>
                 <p className="text-4xl font-bold text-accent">{currentExercise.reps}</p>
-                <p className="text-gray-400 text-sm mt-1">повторений</p>
+                <p className="text-gray-400 text-sm mt-1">
+                  {typeof currentExercise.reps === 'string' && (currentExercise.reps.includes('мин') || currentExercise.reps.includes('сек')) ? '' : 'повторений'}
+                </p>
               </>
             )}
           </div>
 
-          {/* Советы */}
-          {exerciseInfo?.tips && (
+          {/* Советы — только для упражнений */}
+          {!isTask && exerciseInfo?.tips && (
             <div className="bg-accent/10 rounded-xl p-3 border border-accent/20 mb-4">
               <p className="text-xs text-accent mb-1">💡 Техника</p>
               <p className="text-sm text-gray-300">{exerciseInfo.tips}</p>
             </div>
           )}
 
-          {/* Мышцы */}
-          {exerciseInfo?.muscles && (
+          {/* Мышцы — только для упражнений */}
+          {!isTask && exerciseInfo?.muscles && (
             <div className="bg-surface rounded-xl p-3 border border-white/5 mb-4">
               <p className="text-xs text-gray-500">Работают: <span className="text-accent">{exerciseInfo.muscles}</span></p>
             </div>
           )}
 
-          {/* Таймер для упражнений на время */}
-          {currentExercise.type !== 'task' && typeof currentExercise.reps === 'string' && (currentExercise.reps.includes('сек') || currentExercise.reps.includes('мин')) && (
-            <ExerciseTimer 
+          {/* Таймер — только для упражнений на время */}
+          {!isTask && typeof currentExercise.reps === 'string' && (currentExercise.reps.includes('сек') || currentExercise.reps.includes('мин')) && (
+            <ExerciseTimer
               seconds={
-                currentExercise.reps.includes('мин') 
-                  ? parseInt(currentExercise.reps) * 60 
+                currentExercise.reps.includes('мин')
+                  ? parseInt(currentExercise.reps) * 60
                   : parseInt(currentExercise.reps)
-              } 
-              onComplete={completeExercise} 
+              }
+              onComplete={completeExercise}
             />
           )}
+
           {/* Кнопка выполнил */}
           <button
             onClick={completeExercise}
             className="w-full py-4 bg-accent rounded-xl font-semibold text-white text-lg active:scale-95 transition-all"
           >
-            ✅ Выполнил!
+            {isTask ? '✅ Выполнил задание!' : '✅ Выполнил!'}
           </button>
-          
+
           {/* Следующее */}
           {nextExercise && (
             <p className="text-center text-gray-500 text-sm mt-3">
