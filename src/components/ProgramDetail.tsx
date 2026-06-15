@@ -77,6 +77,12 @@ interface Exercise {
   type?: 'exercise' | 'task';
 }
 
+type WorkoutQueueItem = Exercise & {
+  setNumber: number;
+  totalSets: number;
+};
+
+
 interface DayContent {
   day_number: number;
   title: string;
@@ -99,25 +105,31 @@ const TYPE_CONFIG = {
   stretch: { icon: '🧘', color: 'text-green-400', bg: 'bg-green-400/10', label: 'Растяжка' },
 };
 
-// Разворачиваем упражнения в круговой порядок
-function buildWorkoutQueue(exercises: Exercise[]): { name: string; reps: string | number; setNumber: number; totalSets: number }[] {
-  const queue = [];
-  const maxSets = Math.max(...exercises.map(e => e.sets));
-  for (let set = 1; set <= maxSets; set++) {
-    for (const exercise of exercises) {
-      if (set <= exercise.sets) {
-        queue.push({
-          name: exercise.name,
-          reps: exercise.reps,
-          setNumber: set,
-          totalSets: exercise.sets,
-        });
-      }
+// Разворачиваем упражнения в очередь.
+// Важно: task не должен терять type и не должен повторяться по подходам.
+function buildWorkoutQueue(exercises: Exercise[]): WorkoutQueueItem[] {
+  const queue: WorkoutQueueItem[] = [];
+
+  for (const exercise of exercises) {
+    const isTask = exercise.type === 'task';
+
+    const totalSets = isTask
+      ? 1
+      : Math.max(1, Number(exercise.sets) || 1);
+
+    for (let set = 1; set <= totalSets; set++) {
+      queue.push({
+        ...exercise,
+        type: exercise.type || 'exercise',
+        sets: totalSets,
+        setNumber: set,
+        totalSets,
+      });
     }
   }
+
   return queue;
 }
-
 type WorkoutMode = 'overview' | 'exercise' | 'rest' | 'complete';
 
 export function ProgramDetail({ programTitle, currentDay, dayContent, onClose, onCompleteDay }: ProgramDetailProps) {
