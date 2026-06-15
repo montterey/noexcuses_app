@@ -9,6 +9,14 @@ interface Exercise {
   type?: 'exercise' | 'task';
 }
 
+interface ExerciseInfo {
+  name?: string;
+  youtube_id?: string | null;
+  description?: string | null;
+  tips?: string | null;
+  muscles?: string | null;
+}
+
 type WorkoutQueueItem = Exercise & {
   setNumber: number;
   totalSets: number;
@@ -94,7 +102,7 @@ function ExerciseTimer({ seconds }: { seconds: number }) {
     <div className="bg-surface rounded-xl p-4 border border-white/5 mb-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-medium flex items-center gap-2">
-          ⏱ Таймер упражнения
+          ⏱ Таймер
         </p>
 
         {done && (
@@ -105,7 +113,7 @@ function ExerciseTimer({ seconds }: { seconds: number }) {
       </div>
 
       <div className="flex items-center gap-4">
-        <div className="w-16 h-16 rounded-full border-4 border-accent flex items-center justify-center relative">
+        <div className="w-16 h-16 rounded-full border-4 border-accent flex items-center justify-center">
           <span className="text-xl font-bold text-accent">{timeLeft}</span>
         </div>
 
@@ -127,7 +135,7 @@ function ExerciseTimer({ seconds }: { seconds: number }) {
           )}
 
           {running && (
-            <p className="text-center text-gray-400 text-sm">Делай!...</p>
+            <p className="text-center text-gray-400 text-sm">Выполняй...</p>
           )}
 
           {done && (
@@ -144,8 +152,6 @@ function ExerciseTimer({ seconds }: { seconds: number }) {
   );
 }
 
-// Разворачиваем упражнения в очередь.
-// Важно: task не должен терять type и не должен повторяться по подходам.
 function buildWorkoutQueue(exercises: Exercise[]): WorkoutQueueItem[] {
   const queue: WorkoutQueueItem[] = [];
 
@@ -192,7 +198,7 @@ export function ProgramDetail({
 }: ProgramDetailProps) {
   const [mode, setMode] = useState<WorkoutMode>('overview');
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [exerciseInfo, setExerciseInfo] = useState<any>(null);
+  const [exerciseInfo, setExerciseInfo] = useState<ExerciseInfo | null>(null);
   const [restTimer, setRestTimer] = useState(60);
   const [restInterval, setRestInterval] = useState<ReturnType<typeof setInterval> | null>(null);
 
@@ -250,13 +256,11 @@ export function ProgramDetail({
 
     const isTask = currentExercise?.type === 'task';
 
-    // Для обычных заданий отдых не нужен — сразу переходим дальше.
     if (isTask) {
       void goToNext();
       return;
     }
 
-    // Для упражнений оставляем отдых.
     setRestTimer(60);
     setMode('rest');
 
@@ -282,12 +286,11 @@ export function ProgramDetail({
 
   if (!dayContent) return null;
 
-  const config = TYPE_CONFIG[dayContent.type];
+  const config = TYPE_CONFIG[dayContent.type] || TYPE_CONFIG.workout;
   const overviewDayNumber = dayContent.day_number || currentDay;
   const hasTasks = dayContent.exercises.some((exercise) => exercise.type === 'task');
   const startButtonText = hasTasks ? 'Начать день' : 'Запустить тренировку';
 
-  // ОБЗОР ДНЯ
   if (mode === 'overview') {
     return (
       <div className="fixed inset-0 bg-dark z-50 overflow-y-auto">
@@ -386,10 +389,10 @@ export function ProgramDetail({
     );
   }
 
-  // УПРАЖНЕНИЕ / ЗАДАНИЕ
   if (mode === 'exercise' && currentExercise) {
     const isTask = currentExercise.type === 'task';
     const timerSeconds = getSecondsFromReps(currentExercise.reps);
+    const descriptionText = exerciseInfo?.description || exerciseInfo?.tips;
 
     return (
       <div className="fixed inset-0 bg-dark z-50 overflow-y-auto">
@@ -409,7 +412,6 @@ export function ProgramDetail({
             <div className="w-10" />
           </div>
 
-          {/* Прогресс */}
           <div className="h-1.5 bg-surface rounded-full overflow-hidden mb-4">
             <div
               className="h-full bg-accent rounded-full transition-all duration-500"
@@ -417,7 +419,6 @@ export function ProgramDetail({
             />
           </div>
 
-          {/* Подход — только для упражнений */}
           {!isTask && (
             <div className="text-center mb-4">
               <span className="text-xs text-gray-500 bg-surface px-3 py-1 rounded-full">
@@ -426,20 +427,7 @@ export function ProgramDetail({
             </div>
           )}
 
-          {/* Видео / карточка задания */}
-          {isTask ? (
-            <div
-              className="rounded-2xl bg-surface border border-white/5 mb-4 flex items-center justify-center"
-              style={{ aspectRatio: '16/9' }}
-            >
-              <div className="text-center px-6">
-                <p className="text-6xl mb-3">✅</p>
-                <p className="text-gray-400 text-sm">
-                  Просто выполни это действие и отметь его.
-                </p>
-              </div>
-            </div>
-          ) : exerciseInfo?.youtube_id ? (
+          {exerciseInfo?.youtube_id ? (
             <div
               className="rounded-2xl overflow-hidden mb-4 bg-black"
               style={{ aspectRatio: '16/9' }}
@@ -453,6 +441,18 @@ export function ProgramDetail({
                 allowFullScreen
               />
             </div>
+          ) : isTask ? (
+            <div
+              className="rounded-2xl bg-surface border border-white/5 mb-4 flex items-center justify-center"
+              style={{ aspectRatio: '16/9' }}
+            >
+              <div className="text-center px-6">
+                <p className="text-6xl mb-3">✅</p>
+                <p className="text-gray-400 text-sm">
+                  Просто выполни это действие и отметь его.
+                </p>
+              </div>
+            </div>
           ) : (
             <div
               className="rounded-2xl bg-surface border border-white/5 mb-4 flex items-center justify-center"
@@ -462,7 +462,6 @@ export function ProgramDetail({
             </div>
           )}
 
-          {/* Название */}
           <div className="text-center mb-4">
             <h2 className="text-2xl font-bold mb-1">{currentExercise.name}</h2>
 
@@ -483,15 +482,22 @@ export function ProgramDetail({
             )}
           </div>
 
-          {/* Советы — только для упражнений */}
-          {!isTask && exerciseInfo?.tips && (
+          {descriptionText && (
             <div className="bg-accent/10 rounded-xl p-3 border border-accent/20 mb-4">
-              <p className="text-xs text-accent mb-1">Техника</p>
+              <p className="text-xs text-accent mb-1">
+                {isTask ? 'Описание задания' : 'Описание / техника'}
+              </p>
+              <p className="text-sm text-gray-300">{descriptionText}</p>
+            </div>
+          )}
+
+          {!isTask && exerciseInfo?.tips && exerciseInfo?.description && (
+            <div className="bg-surface rounded-xl p-3 border border-white/5 mb-4">
+              <p className="text-xs text-gray-500 mb-1">Совет</p>
               <p className="text-sm text-gray-300">{exerciseInfo.tips}</p>
             </div>
           )}
 
-          {/* Мышцы — только для упражнений */}
           {!isTask && exerciseInfo?.muscles && (
             <div className="bg-surface rounded-xl p-3 border border-white/5 mb-4">
               <p className="text-xs text-gray-500">
@@ -501,10 +507,8 @@ export function ProgramDetail({
             </div>
           )}
 
-          {/* Таймер — только для упражнений на время */}
           {!isTask && timerSeconds && <ExerciseTimer seconds={timerSeconds} />}
 
-          {/* Кнопка выполнил */}
           <button
             onClick={completeExercise}
             className="w-full py-4 bg-accent rounded-xl font-semibold text-white text-lg active:scale-95 transition-all"
@@ -512,7 +516,6 @@ export function ProgramDetail({
             {isTask ? '✅ Выполнил задание!' : '✅ Выполнил!'}
           </button>
 
-          {/* Следующее */}
           {nextExercise && (
             <p className="text-center text-gray-500 text-sm mt-3">
               Следующее:{' '}
@@ -524,7 +527,6 @@ export function ProgramDetail({
     );
   }
 
-  // ОТДЫХ
   if (mode === 'rest') {
     const nextIsTask = nextExercise?.type === 'task';
 
@@ -565,7 +567,6 @@ export function ProgramDetail({
     );
   }
 
-  // ЗАВЕРШЕНО
   if (mode === 'complete') {
     return (
       <div className="fixed inset-0 bg-dark z-50 flex items-center justify-center">
