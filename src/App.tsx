@@ -1,20 +1,27 @@
 import { useState } from 'react';
+
 import { BottomNavigation } from './components/BottomNavigation';
 import { Dashboard } from './components/Dashboard';
 import { Goals } from './components/Goals';
 import { Programs } from './components/Programs';
 import { Stats } from './components/Stats';
 import { Profile } from './components/Profile';
+
 import { UserProvider, useUser } from './contexts/UserContext';
+
 import { useGoals } from './hooks/useGoals';
 import { usePrograms } from './hooks/usePrograms';
 import { useAchievements } from './hooks/useAchievements';
 import { useStats } from './hooks/useStats';
 
+type ProgramCode = 'fitness' | 'running' | 'sleep' | 'reading';
+
 function AppContent() {
-  const { user, loading: userLoading, error, updateUser, refreshUser } = useUser();
+  const { user, loading: userLoading, error, refreshUser } = useUser();
+
   const { goals, toggleGoal, addGoal } = useGoals();
   const { programs, startOrContinueProgram, startNewProgram } = usePrograms();
+
   const { achievements } = useAchievements();
   const { weeklyStats } = useStats();
 
@@ -22,15 +29,12 @@ function AppContent() {
 
   const handleGoalToggle = async (goalId: string) => {
     await toggleGoal(goalId);
-    if (user) {
-      await updateUser({ xp: user.xp + 10, xpThisWeek: user.xpThisWeek + 10 });
-      await refreshUser();
-    }
+    await refreshUser();
   };
 
-  const handleStartNewProgram = async (code: 'fitness' | 'weight_loss' | 'study') => {
-  await startNewProgram(code);
-};
+  const handleStartNewProgram = async (code: ProgramCode) => {
+    await startNewProgram(code);
+  };
 
   const handleAddGoal = async (newGoal: {
     title: string;
@@ -61,6 +65,7 @@ function AppContent() {
       <div className="min-h-screen bg-dark flex items-center justify-center p-4">
         <div className="text-center">
           <p className="text-red-400 mb-4">{error}</p>
+
           <button
             onClick={() => window.location.reload()}
             className="px-4 py-2 bg-accent rounded-lg text-white"
@@ -75,17 +80,48 @@ function AppContent() {
   const renderScreen = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard user={user!} goals={goals} onGoalToggle={handleGoalToggle} onAddGoal={handleAddGoal} />;
+        return (
+          <Dashboard
+            user={user!}
+            goals={goals}
+            onGoalToggle={handleGoalToggle}
+            onAddGoal={handleAddGoal}
+          />
+        );
+
       case 'goals':
-        return <Goals goals={goals} onGoalToggle={handleGoalToggle} onAddGoal={handleAddGoal} />;
+        return (
+          <Goals
+            goals={goals}
+            onGoalToggle={handleGoalToggle}
+            onAddGoal={handleAddGoal}
+          />
+        );
+
       case 'programs':
-        return <Programs programs={programs} onStartProgram={handleStartProgram} onStartNewProgram={handleStartNewProgram} />;
+        return (
+          <Programs
+            programs={programs}
+            onStartProgram={handleStartProgram}
+            onStartNewProgram={handleStartNewProgram}
+          />
+        );
+
       case 'stats':
         return <Stats user={user!} weeklyStats={weeklyStats} />;
+
       case 'profile':
         return <Profile user={user!} achievements={achievements} />;
+
       default:
-        return <Dashboard user={user!} goals={goals} onGoalToggle={handleGoalToggle} onAddGoal={handleAddGoal} />;
+        return (
+          <Dashboard
+            user={user!}
+            goals={goals}
+            onGoalToggle={handleGoalToggle}
+            onAddGoal={handleAddGoal}
+          />
+        );
     }
   };
 
@@ -94,6 +130,7 @@ function AppContent() {
       <div className="max-w-[430px] mx-auto min-h-screen pb-16">
         {renderScreen()}
       </div>
+
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
