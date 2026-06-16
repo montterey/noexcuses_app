@@ -151,10 +151,14 @@ export function useGoals() {
 
           if (frequency === 'once' && latestDoneLog) {
             if (!isWithinHours(latestDoneLog.created_at, ONCE_GOAL_VISIBLE_HOURS)) {
-              await supabase
+              const { error: cleanupError } = await supabase
                 .from('goals')
                 .update({ active: false })
                 .eq('id', goal.id);
+
+              if (cleanupError) {
+                console.error('Error cleaning up completed once goal:', cleanupError);
+              }
 
               return null;
             }
@@ -385,10 +389,10 @@ export function useGoals() {
   };
 
   const postponeGoal = async (goalId: string, time: string) => {
-    if (!user) return;
+    if (!user) return false;
 
     const goal = goals.find((item) => item.id === goalId);
-    if (!goal || goal.frequency !== 'once' || goal.completed) return;
+    if (!goal || goal.frequency !== 'once' || goal.completed) return false;
 
     try {
       const { error } = await supabase
@@ -404,8 +408,10 @@ export function useGoals() {
       if (error) throw error;
 
       await fetchGoals();
+      return true;
     } catch (error) {
       console.error('Error postponing goal:', error);
+      return false;
     }
   };
 
@@ -415,10 +421,10 @@ export function useGoals() {
     time?: string;
     why?: string;
   }) => {
-    if (!user) return;
+    if (!user) return false;
 
     try {
-      await supabase.from('goals').insert({
+      const { error } = await supabase.from('goals').insert({
         user_id: user.id,
         title: newGoal.title,
         frequency: newGoal.type,
@@ -430,9 +436,13 @@ export function useGoals() {
         snooze_until: newGoal.type === 'once' ? getPostponeDeadline() : null,
       });
 
+      if (error) throw error;
+
       await fetchGoals();
+      return true;
     } catch (error) {
       console.error('Error adding goal:', error);
+      return false;
     }
   };
 
