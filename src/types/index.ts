@@ -1,3 +1,7 @@
+export type GoalFrequency = 'daily' | 'once';
+export type GoalType = 'daily' | 'once';
+export type GoalLogStatus = 'done' | 'skipped' | 'frozen';
+
 export interface User {
   id: string;
   username: string;
@@ -7,6 +11,7 @@ export interface User {
   xp: number;
   streak: number;
   longestStreak: number;
+  streakFreezeCount: number;
   totalGoalsCompleted: number;
   xpThisWeek: number;
 }
@@ -14,13 +19,21 @@ export interface User {
 export interface Goal {
   id: string;
   title: string;
-  type: 'daily' | 'once';
+  frequency: GoalFrequency;
+  type: GoalType;
   time?: string;
   why?: string;
   streak: number;
+  goalStreak: number;
   completed: boolean;
   completedToday: boolean;
+  skippedToday: boolean;
+  frozenToday: boolean;
+  todayStatus: GoalLogStatus | null;
+  xpEarnedToday: number;
   active: boolean;
+  paused: boolean;
+  snoozeUntil?: string | null;
 }
 
 export interface Program {
@@ -43,7 +56,13 @@ export interface Achievement {
 }
 
 export interface WeeklyStats {
+  date: string;
   day: string;
+  done: number;
+  skipped: number;
+  frozen: number;
   completed: number;
   total: number;
+  xpEarned: number;
+  isToday: boolean;
 }
