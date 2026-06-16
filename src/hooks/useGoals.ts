@@ -130,7 +130,7 @@ export function useGoals() {
       );
 
       const goalsWithStatus = await Promise.all(
-        visibleGoals.map(async (goal) => {
+        visibleGoals.map(async (goal): Promise<Goal | null> => {
           const frequency = normalizeGoalFrequency(goal.frequency || goal.type);
           const type = normalizeGoalFrequency(goal.type || goal.frequency);
           const todayLog = todayLogByGoalId.get(goal.id);
@@ -173,8 +173,8 @@ export function useGoals() {
               skippedToday: false,
               frozenToday: false,
               isOverdue: false,
-              todayStatus: 'done' as GoalLogStatus,
-              displayStatus: 'done' as const,
+              todayStatus: 'done',
+              displayStatus: 'done',
               xpEarnedToday: Number(latestDoneLog.xp_earned || 0),
               active: Boolean(goal.active),
               paused: Boolean(goal.paused),
