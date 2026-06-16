@@ -1,6 +1,7 @@
 export type GoalFrequency = 'daily' | 'once';
 export type GoalType = 'daily' | 'once';
 export type GoalLogStatus = 'done' | 'skipped' | 'frozen';
+export type GoalDisplayStatus = GoalLogStatus | 'overdue';
 
 export interface User {
   id: string;
@@ -29,10 +30,15 @@ export interface Goal {
   completedToday: boolean;
   skippedToday: boolean;
   frozenToday: boolean;
+  isOverdue: boolean;
   todayStatus: GoalLogStatus | null;
+  displayStatus: GoalDisplayStatus | null;
   xpEarnedToday: number;
   active: boolean;
   paused: boolean;
+  createdAt?: string | null;
+  completedAt?: string | null;
+  deadlineAt?: string | null;
   snoozeUntil?: string | null;
 }
 
