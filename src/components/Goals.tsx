@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Flame, Clock, X, Check, CheckCircle2, Ban, Snowflake, Zap } from 'lucide-react';
+import { Plus, Flame, Clock, X, Check, CheckCircle2, Ban, Snowflake } from 'lucide-react';
 import { Goal, GoalFrequency, User } from '../types';
 
 interface GoalsProps {
@@ -180,11 +180,6 @@ export function Goals({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, onAdd
         >
           Разовые
         </button>
-      </div>
-
-      <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
-        <Zap size={13} className="text-accent" />
-        <span>Done дает +10 XP. Skip и Freeze XP не начисляют.</span>
       </div>
 
       <div className="space-y-3">
