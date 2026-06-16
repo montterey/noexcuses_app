@@ -52,7 +52,7 @@ function AppContent() {
   };
 
   const handleStartNewProgram = async (code: ProgramCode) => {
-    await startNewProgram(code);
+    await startNewProgram(code as Parameters<typeof startNewProgram>[0]);
   };
 
   const handleAddGoal = async (newGoal: {
