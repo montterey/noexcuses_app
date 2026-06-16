@@ -13,6 +13,39 @@ interface GoalLogRow {
   created_at?: string | null;
 }
 
+type AddGoalResult = {
+  success: boolean;
+  error?: string;
+};
+
+function getErrorMessage(error: unknown) {
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message?: unknown }).message || '');
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return error ? String(error) : '';
+}
+
+function shouldTryMinimalGoalInsert(error: unknown) {
+  const errorRecord = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const code = String(errorRecord.code || '');
+  const message = getErrorMessage(error).toLowerCase();
+
+  return (
+    ['22P02', '42703', '42804', 'PGRST102', 'PGRST204'].includes(code) ||
+    message.includes('schema') ||
+    message.includes('column') ||
+    message.includes('type') ||
+    message.includes('invalid input syntax') ||
+    message.includes('could not find') ||
+    message.includes('schema cache')
+  );
+}
+
 function getTodayDate() {
   const today = new Date();
   const year = today.getFullYear();
@@ -420,11 +453,11 @@ export function useGoals() {
     type: GoalFrequency;
     time?: string;
     why?: string;
-  }) => {
-    if (!user) return false;
+  }): Promise<AddGoalResult> => {
+    if (!user) return { success: false, error: 'User is not loaded' };
 
     try {
-      const { error } = await supabase.from('goals').insert({
+      const fullPayload = {
         user_id: user.id,
         title: newGoal.title,
         frequency: newGoal.type,
@@ -434,15 +467,42 @@ export function useGoals() {
         active: true,
         paused: false,
         snooze_until: newGoal.type === 'once' ? getPostponeDeadline() : null,
-      });
+      };
 
-      if (error) throw error;
+      const minimalPayload = {
+        user_id: user.id,
+        title: newGoal.title,
+        type: newGoal.type,
+        time: newGoal.time || null,
+        why: newGoal.why || null,
+        active: true,
+      };
+
+      const { error: fullError } = await supabase.from('goals').insert(fullPayload);
+
+      if (fullError) {
+        console.error('Error adding goal with full payload:', fullError);
+
+        if (!shouldTryMinimalGoalInsert(fullError)) {
+          return { success: false, error: getErrorMessage(fullError) };
+        }
+
+        const { error: minimalError } = await supabase.from('goals').insert(minimalPayload);
+
+        if (minimalError) {
+          console.error('Error adding goal with minimal payload:', minimalError);
+          return {
+            success: false,
+            error: getErrorMessage(minimalError) || getErrorMessage(fullError),
+          };
+        }
+      }
 
       await fetchGoals();
-      return true;
+      return { success: true };
     } catch (error) {
       console.error('Error adding goal:', error);
-      return false;
+      return { success: false, error: getErrorMessage(error) };
     }
   };
 
