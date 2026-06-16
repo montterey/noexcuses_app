@@ -156,10 +156,10 @@ export function useGoals() {
       .eq('user_id', user.id)
       .eq('goal_id', goalId)
       .eq('date', getTodayDate())
-      .maybeSingle();
+      .limit(1);
 
     if (error) throw error;
-    return data;
+    return data?.[0] || null;
   };
 
   const fetchUserSnapshot = async () => {
