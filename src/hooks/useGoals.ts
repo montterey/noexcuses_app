@@ -4,6 +4,14 @@ import { useUser } from '../contexts/UserContext';
 import { Goal, GoalFrequency, GoalLogStatus } from '../types';
 
 const GOAL_XP_REWARD = 10;
+const ONCE_GOAL_VISIBLE_HOURS = 24;
+
+interface GoalLogRow {
+  date: string;
+  status: string | null;
+  xp_earned?: number | null;
+  created_at?: string | null;
+}
 
 function getTodayDate() {
   const today = new Date();
@@ -20,6 +28,20 @@ function addDays(dateString: string, days: number) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function addHours(date: Date, hours: number) {
+  return new Date(date.getTime() + hours * 60 * 60 * 1000);
+}
+
+function isPast(dateString?: string | null) {
+  if (!dateString) return false;
+  return new Date(dateString).getTime() <= Date.now();
+}
+
+function isWithinHours(dateString: string | null | undefined, hours: number) {
+  if (!dateString) return false;
+  return Date.now() - new Date(dateString).getTime() < hours * 60 * 60 * 1000;
 }
 
 function normalizeGoalFrequency(value: unknown): GoalFrequency {
@@ -50,6 +72,16 @@ function getNextLevel(xp: number) {
   return Math.floor(xp / 150) + 1;
 }
 
+function getOnceDeadline(goal: Record<string, any>) {
+  if (goal.snooze_until) return goal.snooze_until as string;
+  if (!goal.created_at) return null;
+  return addHours(new Date(goal.created_at), ONCE_GOAL_VISIBLE_HOURS).toISOString();
+}
+
+function getPostponeDeadline() {
+  return addHours(new Date(), ONCE_GOAL_VISIBLE_HOURS).toISOString();
+}
+
 export function useGoals() {
   const { user } = useUser();
   const [goals, setGoals] = useState<Goal[]>([]);
@@ -72,14 +104,15 @@ export function useGoals() {
       if (goalsError) throw goalsError;
 
       const visibleGoals = (goalsData || []).filter((goal) => {
+        const frequency = normalizeGoalFrequency(goal.frequency || goal.type);
         const isPaused = Boolean(goal.paused);
-        const snoozed = goal.snooze_until && goal.snooze_until > today;
-        return !isPaused && !snoozed;
+        const snoozedDaily = frequency === 'daily' && goal.snooze_until && !isPast(goal.snooze_until);
+        return !isPaused && !snoozedDaily;
       });
 
       const { data: todayLogs, error: logsError } = await supabase
         .from('goal_logs')
-        .select('goal_id, status, xp_earned')
+        .select('goal_id, status, xp_earned, created_at')
         .eq('user_id', user.id)
         .eq('date', today);
 
@@ -91,27 +124,72 @@ export function useGoals() {
           {
             status: log.status as GoalLogStatus,
             xpEarned: Number(log.xp_earned || 0),
+            createdAt: log.created_at as string | null,
           },
         ])
       );
 
       const goalsWithStatus = await Promise.all(
-        visibleGoals.map(async (goal) => {
+        visibleGoals.map(async (goal): Promise<Goal | null> => {
           const frequency = normalizeGoalFrequency(goal.frequency || goal.type);
           const type = normalizeGoalFrequency(goal.type || goal.frequency);
           const todayLog = todayLogByGoalId.get(goal.id);
 
           const { data: historyLogs } = await supabase
             .from('goal_logs')
-            .select('date, status')
+            .select('date, status, xp_earned, created_at')
             .eq('goal_id', goal.id)
-            .order('date', { ascending: false })
+            .order('created_at', { ascending: false })
             .limit(365);
 
+          const logs = (historyLogs || []) as GoalLogRow[];
+          const latestDoneLog = logs.find((log) => log.status === 'done');
           const calculatedStreak = frequency === 'daily'
-            ? calculateGoalStreak(historyLogs || [])
+            ? calculateGoalStreak(logs)
             : 0;
           const goalStreak = Number(goal.goal_streak || calculatedStreak || 0);
+
+          if (frequency === 'once' && latestDoneLog) {
+            if (!isWithinHours(latestDoneLog.created_at, ONCE_GOAL_VISIBLE_HOURS)) {
+              await supabase
+                .from('goals')
+                .update({ active: false })
+                .eq('id', goal.id);
+
+              return null;
+            }
+
+            return {
+              id: goal.id,
+              title: goal.title,
+              frequency,
+              type,
+              time: goal.time || undefined,
+              why: goal.why || undefined,
+              streak: 0,
+              goalStreak: 0,
+              completed: true,
+              completedToday: true,
+              skippedToday: false,
+              frozenToday: false,
+              isOverdue: false,
+              todayStatus: 'done',
+              displayStatus: 'done',
+              xpEarnedToday: Number(latestDoneLog.xp_earned || 0),
+              active: Boolean(goal.active),
+              paused: Boolean(goal.paused),
+              createdAt: goal.created_at || null,
+              completedAt: latestDoneLog.created_at || null,
+              deadlineAt: latestDoneLog.created_at
+                ? addHours(new Date(latestDoneLog.created_at), ONCE_GOAL_VISIBLE_HOURS).toISOString()
+                : null,
+              snoozeUntil: goal.snooze_until || null,
+            };
+          }
+
+          const onceDeadline = frequency === 'once' ? getOnceDeadline(goal) : null;
+          const isOverdue = frequency === 'once' && Boolean(onceDeadline) && isPast(onceDeadline);
+          const displayStatus = isOverdue ? 'overdue' : todayLog?.status || null;
 
           return {
             id: goal.id,
@@ -126,16 +204,21 @@ export function useGoals() {
             completedToday: todayLog?.status === 'done',
             skippedToday: todayLog?.status === 'skipped',
             frozenToday: todayLog?.status === 'frozen',
+            isOverdue,
             todayStatus: todayLog?.status || null,
+            displayStatus,
             xpEarnedToday: todayLog?.xpEarned || 0,
             active: Boolean(goal.active),
             paused: Boolean(goal.paused),
+            createdAt: goal.created_at || null,
+            completedAt: todayLog?.createdAt || null,
+            deadlineAt: onceDeadline,
             snoozeUntil: goal.snooze_until || null,
           };
         })
       );
 
-      setGoals(goalsWithStatus);
+      setGoals(goalsWithStatus.filter((goal): goal is Goal => Boolean(goal)));
     } catch (error) {
       console.error('Error fetching goals:', error);
     } finally {
@@ -187,7 +270,7 @@ export function useGoals() {
     if (!user) return;
 
     const goal = goals.find((item) => item.id === goalId);
-    if (!goal || goal.todayStatus) return;
+    if (!goal || goal.displayStatus) return;
 
     try {
       const existingLog = await fetchTodayLog(goalId);
@@ -222,14 +305,7 @@ export function useGoals() {
 
       if (userError) throw userError;
 
-      if (goal.frequency === 'once') {
-        const { error: goalError } = await supabase
-          .from('goals')
-          .update({ active: false })
-          .eq('id', goalId);
-
-        if (goalError) throw goalError;
-      } else {
+      if (goal.frequency === 'daily') {
         await supabase.rpc('update_user_streak', {
           p_user_id: user.id,
         });
@@ -246,7 +322,7 @@ export function useGoals() {
     if (!user) return;
 
     const goal = goals.find((item) => item.id === goalId);
-    if (!goal || goal.todayStatus) return;
+    if (!goal || goal.frequency !== 'daily' || goal.displayStatus) return;
 
     try {
       const existingLog = await fetchTodayLog(goalId);
@@ -273,7 +349,7 @@ export function useGoals() {
     if (!user) return;
 
     const goal = goals.find((item) => item.id === goalId);
-    if (!goal || goal.frequency !== 'daily' || goal.todayStatus) return;
+    if (!goal || goal.frequency !== 'daily' || goal.displayStatus) return;
 
     try {
       const existingLog = await fetchTodayLog(goalId);
@@ -308,6 +384,31 @@ export function useGoals() {
     }
   };
 
+  const postponeGoal = async (goalId: string, time: string) => {
+    if (!user) return;
+
+    const goal = goals.find((item) => item.id === goalId);
+    if (!goal || goal.frequency !== 'once' || goal.completed) return;
+
+    try {
+      const { error } = await supabase
+        .from('goals')
+        .update({
+          time: time || null,
+          snooze_until: getPostponeDeadline(),
+          active: true,
+        })
+        .eq('id', goalId)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      await fetchGoals();
+    } catch (error) {
+      console.error('Error postponing goal:', error);
+    }
+  };
+
   const addGoal = async (newGoal: {
     title: string;
     type: GoalFrequency;
@@ -326,6 +427,7 @@ export function useGoals() {
         why: newGoal.why || null,
         active: true,
         paused: false,
+        snooze_until: newGoal.type === 'once' ? getPostponeDeadline() : null,
       });
 
       await fetchGoals();
@@ -341,6 +443,7 @@ export function useGoals() {
     toggleGoal: completeGoal,
     skipGoal,
     freezeGoal,
+    postponeGoal,
     addGoal,
     refreshGoals: fetchGoals,
   };

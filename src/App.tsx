@@ -20,7 +20,7 @@ type ProgramCode = 'fitness' | 'running' | 'sleep' | 'reading';
 function AppContent() {
   const { user, loading: userLoading, error, refreshUser } = useUser();
 
-  const { goals, completeGoal, skipGoal, freezeGoal, addGoal } = useGoals();
+  const { goals, completeGoal, skipGoal, freezeGoal, postponeGoal, addGoal } = useGoals();
   const { programs, startOrContinueProgram, startNewProgram } = usePrograms();
 
   const { achievements, refreshAchievements } = useAchievements();
@@ -48,6 +48,11 @@ function AppContent() {
 
   const handleGoalFreeze = async (goalId: string) => {
     await freezeGoal(goalId);
+    await refreshAfterGoalAction();
+  };
+
+  const handleGoalPostpone = async (goalId: string, time: string) => {
+    await postponeGoal(goalId, time);
     await refreshAfterGoalAction();
   };
 
@@ -106,6 +111,7 @@ function AppContent() {
             onGoalDone={handleGoalDone}
             onGoalSkip={handleGoalSkip}
             onGoalFreeze={handleGoalFreeze}
+            onGoalPostpone={handleGoalPostpone}
             onAddGoal={handleAddGoal}
           />
         );
@@ -118,6 +124,7 @@ function AppContent() {
             onGoalDone={handleGoalDone}
             onGoalSkip={handleGoalSkip}
             onGoalFreeze={handleGoalFreeze}
+            onGoalPostpone={handleGoalPostpone}
             onAddGoal={handleAddGoal}
           />
         );
@@ -145,6 +152,7 @@ function AppContent() {
             onGoalDone={handleGoalDone}
             onGoalSkip={handleGoalSkip}
             onGoalFreeze={handleGoalFreeze}
+            onGoalPostpone={handleGoalPostpone}
             onAddGoal={handleAddGoal}
           />
         );
