@@ -2,6 +2,11 @@ import { useState } from 'react';
 import { Flame, Zap, Clock, CheckCircle2, Plus, X, Check, Ban, Snowflake } from 'lucide-react';
 import { User, Goal, GoalFrequency } from '../types';
 
+type AddGoalResult = {
+  success: boolean;
+  error?: string;
+};
+
 interface DashboardProps {
   user: User;
   goals: Goal[];
@@ -9,7 +14,7 @@ interface DashboardProps {
   onGoalSkip: (goalId: string) => void;
   onGoalFreeze: (goalId: string) => void;
   onGoalPostpone: (goalId: string, time: string) => Promise<boolean>;
-  onAddGoal: (goal: { title: string; type: GoalFrequency; time?: string; why?: string }) => Promise<boolean>;
+  onAddGoal: (goal: { title: string; type: GoalFrequency; time?: string; why?: string }) => Promise<AddGoalResult>;
 }
 
 function getRequiredXp(level: number): number {
@@ -22,6 +27,10 @@ function getStatusLabel(goal: Goal) {
   if (goal.displayStatus === 'frozen') return 'Заморожено сегодня';
   return 'Сегодня';
 }
+
+const getCreateErrorMessage = (message?: string) => (
+  message ? `Не удалось создать цель: ${message}` : 'Не удалось создать цель'
+);
 
 export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, onAddGoal }: DashboardProps) {
   const [showModal, setShowModal] = useState(false);
@@ -49,15 +58,15 @@ export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, o
     setCreateError('');
 
     try {
-      const success = await onAddGoal({
+      const result = await onAddGoal({
         title: formData.title.trim(),
         type: formData.type,
         time: formData.time || undefined,
         why: formData.why.trim() || undefined,
       });
 
-      if (!success) {
-        setCreateError('Не удалось создать цель');
+      if (!result.success) {
+        setCreateError(getCreateErrorMessage(result.error));
         return;
       }
 
@@ -65,7 +74,7 @@ export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, o
       setShowModal(false);
     } catch (error) {
       console.error('Error creating goal:', error);
-      setCreateError('Не удалось создать цель');
+      setCreateError(getCreateErrorMessage(error instanceof Error ? error.message : undefined));
     } finally {
       setCreating(false);
     }
