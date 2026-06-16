@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings, Trophy, Globe, Bell, ChevronRight, X } from 'lucide-react';
+import { Settings, Trophy, Globe, Bell, ChevronRight, X, Snowflake } from 'lucide-react';
 import { User, Achievement } from '../types';
 
 interface ProfileProps {
@@ -77,6 +77,21 @@ export function Profile({ user, achievements }: ProfileProps) {
                   style={{ width: `${xpPercent}%` }}
                 />
               </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="bg-surface rounded-2xl p-4 border border-white/5">
+              <p className="text-xs text-gray-400 mb-1">Текущая серия</p>
+              <p className="text-2xl font-bold">{user.streak}</p>
+            </div>
+
+            <div className="bg-surface rounded-2xl p-4 border border-white/5">
+              <div className="flex items-center gap-2 mb-1">
+                <Snowflake size={16} className="text-cyan-200" />
+                <p className="text-xs text-gray-400">Заморозки</p>
+              </div>
+              <p className="text-2xl font-bold text-cyan-100">{user.streakFreezeCount}</p>
             </div>
           </div>
 
