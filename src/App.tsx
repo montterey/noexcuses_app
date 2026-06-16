@@ -13,23 +13,42 @@ import { useGoals } from './hooks/useGoals';
 import { usePrograms } from './hooks/usePrograms';
 import { useAchievements } from './hooks/useAchievements';
 import { useStats } from './hooks/useStats';
+import { GoalFrequency } from './types';
 
 type ProgramCode = 'fitness' | 'running' | 'sleep' | 'reading';
 
 function AppContent() {
   const { user, loading: userLoading, error, refreshUser } = useUser();
 
-  const { goals, toggleGoal, addGoal } = useGoals();
+  const { goals, completeGoal, skipGoal, freezeGoal, addGoal } = useGoals();
   const { programs, startOrContinueProgram, startNewProgram } = usePrograms();
 
-  const { achievements } = useAchievements();
-  const { weeklyStats } = useStats();
+  const { achievements, refreshAchievements } = useAchievements();
+  const { weeklyStats, refreshStats } = useStats();
 
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  const handleGoalToggle = async (goalId: string) => {
-    await toggleGoal(goalId);
-    await refreshUser();
+  const refreshAfterGoalAction = async () => {
+    await Promise.all([
+      refreshUser(),
+      refreshStats(),
+      refreshAchievements(),
+    ]);
+  };
+
+  const handleGoalDone = async (goalId: string) => {
+    await completeGoal(goalId);
+    await refreshAfterGoalAction();
+  };
+
+  const handleGoalSkip = async (goalId: string) => {
+    await skipGoal(goalId);
+    await refreshAfterGoalAction();
+  };
+
+  const handleGoalFreeze = async (goalId: string) => {
+    await freezeGoal(goalId);
+    await refreshAfterGoalAction();
   };
 
   const handleStartNewProgram = async (code: ProgramCode) => {
@@ -38,7 +57,7 @@ function AppContent() {
 
   const handleAddGoal = async (newGoal: {
     title: string;
-    type: 'daily' | 'once';
+    type: GoalFrequency;
     time?: string;
     why?: string;
   }) => {
@@ -84,7 +103,9 @@ function AppContent() {
           <Dashboard
             user={user!}
             goals={goals}
-            onGoalToggle={handleGoalToggle}
+            onGoalDone={handleGoalDone}
+            onGoalSkip={handleGoalSkip}
+            onGoalFreeze={handleGoalFreeze}
             onAddGoal={handleAddGoal}
           />
         );
@@ -92,8 +113,11 @@ function AppContent() {
       case 'goals':
         return (
           <Goals
+            user={user!}
             goals={goals}
-            onGoalToggle={handleGoalToggle}
+            onGoalDone={handleGoalDone}
+            onGoalSkip={handleGoalSkip}
+            onGoalFreeze={handleGoalFreeze}
             onAddGoal={handleAddGoal}
           />
         );
@@ -118,7 +142,9 @@ function AppContent() {
           <Dashboard
             user={user!}
             goals={goals}
-            onGoalToggle={handleGoalToggle}
+            onGoalDone={handleGoalDone}
+            onGoalSkip={handleGoalSkip}
+            onGoalFreeze={handleGoalFreeze}
             onAddGoal={handleAddGoal}
           />
         );
