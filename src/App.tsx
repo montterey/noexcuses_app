@@ -52,8 +52,9 @@ function AppContent() {
   };
 
   const handleGoalPostpone = async (goalId: string, time: string) => {
-    await postponeGoal(goalId, time);
-    await refreshAfterGoalAction();
+    const success = await postponeGoal(goalId, time);
+    if (success) await refreshAfterGoalAction();
+    return success;
   };
 
   const handleStartNewProgram = async (code: ProgramCode) => {
@@ -66,7 +67,7 @@ function AppContent() {
     time?: string;
     why?: string;
   }) => {
-    await addGoal(newGoal);
+    return addGoal(newGoal);
   };
 
   const handleStartProgram = async (programId: string) => {
