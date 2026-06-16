@@ -16,6 +16,22 @@ interface UserProviderProps {
   children: ReactNode;
 }
 
+function mapUserData(userData: Record<string, any>, avatar?: string): User {
+  return {
+    id: userData.id,
+    username: userData.username || '',
+    firstName: userData.first_name,
+    avatar,
+    level: userData.level,
+    xp: userData.xp,
+    streak: userData.streak,
+    longestStreak: userData.longest_streak,
+    streakFreezeCount: userData.streak_freeze_count || 0,
+    totalGoalsCompleted: userData.total_goals_completed,
+    xpThisWeek: userData.xp_this_week,
+  };
+}
+
 export function UserProvider({ children }: UserProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,18 +92,7 @@ export function UserProvider({ children }: UserProviderProps) {
 
       if (fetchError) throw fetchError;
 
-      setUser({
-        id: userData.id,
-        username: userData.username || '',
-        firstName: userData.first_name,
-        avatar: telegramUser?.photo_url,
-        level: userData.level,
-        xp: userData.xp,
-        streak: userData.streak,
-        longestStreak: userData.longest_streak,
-        totalGoalsCompleted: userData.total_goals_completed,
-        xpThisWeek: userData.xp_this_week,
-      });
+      setUser(mapUserData(userData, telegramUser?.photo_url));
 
       // Notify Telegram WebApp is ready
       window.Telegram?.WebApp?.ready?.();
@@ -109,15 +114,7 @@ export function UserProvider({ children }: UserProviderProps) {
       .single();
 
     if (!error && data) {
-      setUser({
-        ...user,
-        level: data.level,
-        xp: data.xp,
-        streak: data.streak,
-        longestStreak: data.longest_streak,
-        totalGoalsCompleted: data.total_goals_completed,
-        xpThisWeek: data.xp_this_week,
-      });
+      setUser(mapUserData(data, user.avatar));
     }
   };
 
@@ -129,6 +126,7 @@ export function UserProvider({ children }: UserProviderProps) {
     if (updates.xp !== undefined) updateData.xp = updates.xp;
     if (updates.streak !== undefined) updateData.streak = updates.streak;
     if (updates.longestStreak !== undefined) updateData.longest_streak = updates.longestStreak;
+    if (updates.streakFreezeCount !== undefined) updateData.streak_freeze_count = updates.streakFreezeCount;
     if (updates.totalGoalsCompleted !== undefined) updateData.total_goals_completed = updates.totalGoalsCompleted;
     if (updates.xpThisWeek !== undefined) updateData.xp_this_week = updates.xpThisWeek;
 

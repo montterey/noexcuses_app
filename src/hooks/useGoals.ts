@@ -1,7 +1,54 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
-import { Goal } from '../types';
+import { Goal, GoalFrequency, GoalLogStatus } from '../types';
+
+const GOAL_XP_REWARD = 10;
+
+function getTodayDate() {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(dateString: string, days: number) {
+  const date = new Date(`${dateString}T00:00:00`);
+  date.setDate(date.getDate() + days);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeGoalFrequency(value: unknown): GoalFrequency {
+  return value === 'once' ? 'once' : 'daily';
+}
+
+function calculateGoalStreak(logs: Array<{ date: string; status: string | null }>) {
+  const streakDates = new Set(
+    logs
+      .filter((log) => log.status === 'done' || log.status === 'frozen')
+      .map((log) => log.date)
+  );
+
+  const today = getTodayDate();
+  const yesterday = addDays(today, -1);
+  let cursor = streakDates.has(today) ? today : streakDates.has(yesterday) ? yesterday : null;
+  let streak = 0;
+
+  while (cursor && streakDates.has(cursor)) {
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+
+  return streak;
+}
+
+function getNextLevel(xp: number) {
+  return Math.floor(xp / 150) + 1;
+}
 
 export function useGoals() {
   const { user } = useUser();
@@ -13,8 +60,8 @@ export function useGoals() {
 
     try {
       setLoading(true);
+      const today = getTodayDate();
 
-      // Fetch goals
       const { data: goalsData, error: goalsError } = await supabase
         .from('goals')
         .select('*')
@@ -24,77 +71,71 @@ export function useGoals() {
 
       if (goalsError) throw goalsError;
 
-      // Fetch today's completions
-      const today = new Date().toISOString().split('T')[0];
+      const visibleGoals = (goalsData || []).filter((goal) => {
+        const isPaused = Boolean(goal.paused);
+        const snoozed = goal.snooze_until && goal.snooze_until > today;
+        return !isPaused && !snoozed;
+      });
+
       const { data: todayLogs, error: logsError } = await supabase
         .from('goal_logs')
-        .select('goal_id')
+        .select('goal_id, status, xp_earned')
         .eq('user_id', user.id)
         .eq('date', today);
 
       if (logsError) throw logsError;
 
-      const completedGoalIds = new Set(todayLogs?.map((log) => log.goal_id) || []);
+      const todayLogByGoalId = new Map(
+        (todayLogs || []).map((log) => [
+          log.goal_id,
+          {
+            status: log.status as GoalLogStatus,
+            xpEarned: Number(log.xp_earned || 0),
+          },
+        ])
+      );
 
-      // Calculate streaks for each goal
-      const goalsWithStreaks = await Promise.all(
-        (goalsData || []).map(async (goal) => {
-          // Count consecutive days completed
-          const { data: logs } = await supabase
+      const goalsWithStatus = await Promise.all(
+        visibleGoals.map(async (goal) => {
+          const frequency = normalizeGoalFrequency(goal.frequency || goal.type);
+          const type = normalizeGoalFrequency(goal.type || goal.frequency);
+          const todayLog = todayLogByGoalId.get(goal.id);
+
+          const { data: historyLogs } = await supabase
             .from('goal_logs')
-            .select('date')
+            .select('date, status')
             .eq('goal_id', goal.id)
             .order('date', { ascending: false })
             .limit(365);
 
-          let streak = 0;
-          const todayDate = new Date();
-          todayDate.setHours(0, 0, 0, 0);
-
-          if (logs && logs.length > 0) {
-            const logDates = logs.map((l) => {
-              const d = new Date(l.date);
-              d.setHours(0, 0, 0, 0);
-              return d.getTime();
-            });
-
-            // Check if there's a log for today or yesterday to start counting streak
-            const yesterday = new Date(todayDate);
-            yesterday.setDate(yesterday.getDate() - 1);
-
-            const hasToday = logDates.includes(todayDate.getTime());
-            const hasYesterday = logDates.includes(yesterday.getTime());
-
-            if (hasToday || hasYesterday) {
-              streak = 1;
-              const checkDate = hasToday ? new Date(todayDate) : new Date(yesterday);
-
-              for (let i = 0; i < 365; i++) {
-                checkDate.setDate(checkDate.getDate() - 1);
-                if (logDates.includes(checkDate.getTime())) {
-                  streak++;
-                } else {
-                  break;
-                }
-              }
-            }
-          }
+          const calculatedStreak = frequency === 'daily'
+            ? calculateGoalStreak(historyLogs || [])
+            : 0;
+          const goalStreak = Number(goal.goal_streak || calculatedStreak || 0);
 
           return {
             id: goal.id,
             title: goal.title,
-            type: goal.frequency,
-            time: goal.time,
-            why: goal.why,
-            streak,
-            completed: completedGoalIds.has(goal.id),
-            completedToday: completedGoalIds.has(goal.id),
-            active: goal.active,
+            frequency,
+            type,
+            time: goal.time || undefined,
+            why: goal.why || undefined,
+            streak: goalStreak,
+            goalStreak,
+            completed: todayLog?.status === 'done',
+            completedToday: todayLog?.status === 'done',
+            skippedToday: todayLog?.status === 'skipped',
+            frozenToday: todayLog?.status === 'frozen',
+            todayStatus: todayLog?.status || null,
+            xpEarnedToday: todayLog?.xpEarned || 0,
+            active: Boolean(goal.active),
+            paused: Boolean(goal.paused),
+            snoozeUntil: goal.snooze_until || null,
           };
         })
       );
 
-      setGoals(goalsWithStreaks);
+      setGoals(goalsWithStatus);
     } catch (error) {
       console.error('Error fetching goals:', error);
     } finally {
@@ -106,55 +147,170 @@ export function useGoals() {
     fetchGoals();
   }, [fetchGoals]);
 
-  const toggleGoal = async (goalId: string) => {
-  if (!user) return;
+  const fetchTodayLog = async (goalId: string) => {
+    if (!user) return null;
 
-  const goal = goals.find((g) => g.id === goalId);
-  if (!goal) return;
+    const { data, error } = await supabase
+      .from('goal_logs')
+      .select('id, status')
+      .eq('user_id', user.id)
+      .eq('goal_id', goalId)
+      .eq('date', getTodayDate())
+      .limit(1);
 
-  // Если уже выполнено — ничего не делаем
-  if (goal.completedToday) return;
+    if (error) throw error;
+    return data?.[0] || null;
+  };
 
-  const today = new Date().toISOString().split('T')[0];
+  const fetchUserSnapshot = async () => {
+    if (!user) return null;
 
-  try {
-    // Добавляем выполнение
-    await supabase.from('goal_logs').insert({
-      goal_id: goalId,
-      user_id: user.id,
-      status: 'done',
-      date: today,
-    });
-
-    // Начисляем +10 XP
-    const newXp = (user.xp || 0) + 10;
-    const newLevel = Math.floor(newXp / 150) + 1;
-   await supabase
+    const { data, error } = await supabase
       .from('users')
-      .update({ xp: newXp, level: newLevel })
-      .eq('id', user.id);
+      .select('xp, level, xp_this_week, streak_freeze_count, total_goals_completed')
+      .eq('id', user.id)
+      .single();
 
-    // Проверяем достижения
+    if (error) throw error;
+    return data;
+  };
+
+  const runAchievementCheck = async () => {
+    if (!user) return;
+
     await supabase.rpc('check_and_unlock_achievements', {
-      p_user_id: user.id
+      p_user_id: user.id,
     });
+  };
 
-    // Обновляем streak
-await supabase.rpc('update_user_streak', {
-  p_user_id: user.id
-});
+  const completeGoal = async (goalId: string) => {
+    if (!user) return;
 
-    await fetchGoals();
+    const goal = goals.find((item) => item.id === goalId);
+    if (!goal || goal.todayStatus) return;
 
-    await fetchGoals();
-  } catch (error) {
-    console.error('Error toggling goal:', error);
-  }
-};
+    try {
+      const existingLog = await fetchTodayLog(goalId);
+      if (existingLog) return;
+
+      const today = getTodayDate();
+      const { error: insertError } = await supabase.from('goal_logs').insert({
+        goal_id: goalId,
+        user_id: user.id,
+        status: 'done',
+        date: today,
+        xp_earned: GOAL_XP_REWARD,
+      });
+
+      if (insertError) throw insertError;
+
+      const userSnapshot = await fetchUserSnapshot();
+      const nextXp = Number(userSnapshot?.xp || user.xp || 0) + GOAL_XP_REWARD;
+      const nextTotalCompleted = Number(
+        userSnapshot?.total_goals_completed || user.totalGoalsCompleted || 0
+      ) + 1;
+
+      const { error: userError } = await supabase
+        .from('users')
+        .update({
+          xp: nextXp,
+          level: getNextLevel(nextXp),
+          xp_this_week: Number(userSnapshot?.xp_this_week || user.xpThisWeek || 0) + GOAL_XP_REWARD,
+          total_goals_completed: nextTotalCompleted,
+        })
+        .eq('id', user.id);
+
+      if (userError) throw userError;
+
+      if (goal.frequency === 'once') {
+        const { error: goalError } = await supabase
+          .from('goals')
+          .update({ active: false })
+          .eq('id', goalId);
+
+        if (goalError) throw goalError;
+      } else {
+        await supabase.rpc('update_user_streak', {
+          p_user_id: user.id,
+        });
+      }
+
+      await runAchievementCheck();
+      await fetchGoals();
+    } catch (error) {
+      console.error('Error completing goal:', error);
+    }
+  };
+
+  const skipGoal = async (goalId: string) => {
+    if (!user) return;
+
+    const goal = goals.find((item) => item.id === goalId);
+    if (!goal || goal.todayStatus) return;
+
+    try {
+      const existingLog = await fetchTodayLog(goalId);
+      if (existingLog) return;
+
+      const { error } = await supabase.from('goal_logs').insert({
+        goal_id: goalId,
+        user_id: user.id,
+        status: 'skipped',
+        date: getTodayDate(),
+        xp_earned: 0,
+      });
+
+      if (error) throw error;
+
+      await runAchievementCheck();
+      await fetchGoals();
+    } catch (error) {
+      console.error('Error skipping goal:', error);
+    }
+  };
+
+  const freezeGoal = async (goalId: string) => {
+    if (!user) return;
+
+    const goal = goals.find((item) => item.id === goalId);
+    if (!goal || goal.frequency !== 'daily' || goal.todayStatus) return;
+
+    try {
+      const existingLog = await fetchTodayLog(goalId);
+      if (existingLog) return;
+
+      const userSnapshot = await fetchUserSnapshot();
+      const freezeCount = Number(userSnapshot?.streak_freeze_count || user.streakFreezeCount || 0);
+
+      if (freezeCount <= 0) return;
+
+      const { error: insertError } = await supabase.from('goal_logs').insert({
+        goal_id: goalId,
+        user_id: user.id,
+        status: 'frozen',
+        date: getTodayDate(),
+        xp_earned: 0,
+      });
+
+      if (insertError) throw insertError;
+
+      const { error: userError } = await supabase
+        .from('users')
+        .update({ streak_freeze_count: freezeCount - 1 })
+        .eq('id', user.id);
+
+      if (userError) throw userError;
+
+      await runAchievementCheck();
+      await fetchGoals();
+    } catch (error) {
+      console.error('Error freezing goal:', error);
+    }
+  };
 
   const addGoal = async (newGoal: {
     title: string;
-    type: 'daily' | 'once';
+    type: GoalFrequency;
     time?: string;
     why?: string;
   }) => {
@@ -165,9 +321,11 @@ await supabase.rpc('update_user_streak', {
         user_id: user.id,
         title: newGoal.title,
         frequency: newGoal.type,
+        type: newGoal.type,
         time: newGoal.time || null,
         why: newGoal.why || null,
         active: true,
+        paused: false,
       });
 
       await fetchGoals();
@@ -176,5 +334,14 @@ await supabase.rpc('update_user_streak', {
     }
   };
 
-  return { goals, loading, toggleGoal, addGoal, refreshGoals: fetchGoals };
+  return {
+    goals,
+    loading,
+    completeGoal,
+    toggleGoal: completeGoal,
+    skipGoal,
+    freezeGoal,
+    addGoal,
+    refreshGoals: fetchGoals,
+  };
 }

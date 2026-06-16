@@ -17,8 +17,7 @@ interface ExerciseDetailProps {
   onStartTimer: (seconds: number) => void;
 }
 
-export function ExerciseDetail({ exercise, exerciseInfo, onClose, onStartTimer }: ExerciseDetailProps) {
-  const [timerSeconds, setTimerSeconds] = useState(30);
+export function ExerciseDetail({ exercise, exerciseInfo, onClose }: ExerciseDetailProps) {
   const [timerActive, setTimerActive] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
 

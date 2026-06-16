@@ -3,6 +3,13 @@ import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { WeeklyStats } from '../types';
 
+function formatDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function useStats() {
   const { user } = useUser();
   const [weeklyStats, setWeeklyStats] = useState<WeeklyStats[]>([]);
@@ -15,17 +22,22 @@ export function useStats() {
       setLoading(true);
 
       const now = new Date();
+      const today = formatDate(now);
       const dayOfWeek = now.getDay();
       const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
       const weekStart = new Date(now);
       weekStart.setDate(now.getDate() + mondayOffset);
       weekStart.setHours(0, 0, 0, 0);
 
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+
       const { data: logs, error } = await supabase
         .from('goal_logs')
-        .select('date')
+        .select('date, status, xp_earned')
         .eq('user_id', user.id)
-        .gte('date', weekStart.toISOString().split('T')[0]);
+        .gte('date', formatDate(weekStart))
+        .lte('date', formatDate(weekEnd));
 
       if (error) throw error;
 
@@ -35,17 +47,28 @@ export function useStats() {
       for (let i = 0; i < 7; i++) {
         const dayDate = new Date(weekStart);
         dayDate.setDate(weekStart.getDate() + i);
-        const dateStr = dayDate.toISOString().split('T')[0];
+        const dateStr = formatDate(dayDate);
         const dayIndex = dayDate.getDay();
+        const dayLogs = (logs || []).filter((log) => log.date === dateStr);
 
-        const completed = (logs || []).filter(
-          (log) => log.date === dateStr
-        ).length;
+        const done = dayLogs.filter((log) => log.status === 'done').length;
+        const skipped = dayLogs.filter((log) => log.status === 'skipped').length;
+        const frozen = dayLogs.filter((log) => log.status === 'frozen').length;
+        const xpEarned = dayLogs.reduce(
+          (sum, log) => sum + Number(log.xp_earned || 0),
+          0
+        );
 
         stats.push({
+          date: dateStr,
           day: dayNames[dayIndex],
-          completed,
-          total: 5,
+          done,
+          skipped,
+          frozen,
+          completed: done,
+          total: done + skipped + frozen,
+          xpEarned,
+          isToday: dateStr === today,
         });
       }
 

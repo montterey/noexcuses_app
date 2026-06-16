@@ -1,31 +1,40 @@
 import { useState } from 'react';
-import { Flame, Zap, Clock, CheckCircle2, Plus, X, Check } from 'lucide-react';
-import { User, Goal } from '../types';
+import { Flame, Zap, Clock, CheckCircle2, Plus, X, Check, Ban, Snowflake } from 'lucide-react';
+import { User, Goal, GoalFrequency } from '../types';
 
 interface DashboardProps {
   user: User;
   goals: Goal[];
-  onGoalToggle: (goalId: string) => void;
-  onAddGoal: (goal: { title: string; type: 'daily' | 'once'; time?: string; why?: string }) => void;
+  onGoalDone: (goalId: string) => void;
+  onGoalSkip: (goalId: string) => void;
+  onGoalFreeze: (goalId: string) => void;
+  onAddGoal: (goal: { title: string; type: GoalFrequency; time?: string; why?: string }) => void;
 }
 
 function getRequiredXp(level: number): number {
   return 100 + level * 50;
 }
 
-export function Dashboard({ user, goals, onGoalToggle, onAddGoal }: DashboardProps) {
+function getStatusLabel(goal: Goal) {
+  if (goal.completedToday) return 'Выполнено';
+  if (goal.skippedToday) return 'Пропущено';
+  if (goal.frozenToday) return 'Заморожено';
+  return 'Сегодня';
+}
+
+export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, onAddGoal }: DashboardProps) {
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
-    type: 'daily' as 'daily' | 'once',
+    type: 'daily' as GoalFrequency,
     time: '',
     why: '',
   });
 
-  const dailyGoals = goals.filter((g) => g.type === 'daily');
+  const dailyGoals = goals.filter((g) => g.frequency === 'daily');
   const todayGoals = dailyGoals.slice(0, 5);
-  const completedToday = todayGoals.filter((g) => g.completedToday).length;
-  const completionPercent = todayGoals.length > 0 ? Math.round((completedToday / todayGoals.length) * 100) : 0;
+  const completedToday = dailyGoals.filter((g) => g.completedToday).length;
+  const completionPercent = dailyGoals.length > 0 ? Math.round((completedToday / dailyGoals.length) * 100) : 0;
 
   const currentLevelXp = user.xp % getRequiredXp(user.level);
   const xpPercent = (currentLevelXp / getRequiredXp(user.level)) * 100;
@@ -94,6 +103,14 @@ export function Dashboard({ user, goals, onGoalToggle, onAddGoal }: DashboardPro
         </div>
       </div>
 
+      <div className="flex items-center justify-between px-4 py-3 bg-cyan-500/10 border border-cyan-300/20 rounded-2xl">
+        <div className="flex items-center gap-2">
+          <Snowflake size={18} className="text-cyan-200" />
+          <span className="text-sm font-medium text-cyan-50">Заморозки серии</span>
+        </div>
+        <span className="text-lg font-bold text-cyan-50">{user.streakFreezeCount}</span>
+      </div>
+
       <div>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Цели на сегодня</h2>
@@ -119,50 +136,104 @@ export function Dashboard({ user, goals, onGoalToggle, onAddGoal }: DashboardPro
             </button>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {todayGoals.map((goal) => {
-                console.log('goal item rendered', goal.id);
-                return (
-              <button
-                key={goal.id}
-                onClick={() => {
-                  console.log('toggleGoal called', goal.id);
-                  onGoalToggle(goal.id);
-                }}
-                className="w-full flex items-center gap-3 p-4 bg-surface rounded-xl border border-white/5 hover:border-white/10 transition-all active:scale-[0.98] touch-manipulation cursor-pointer"
-              >
+              const hasTodayStatus = Boolean(goal.todayStatus);
+              const canFreeze = user.streakFreezeCount > 0 && !hasTodayStatus;
+
+              return (
                 <div
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all pointer-events-none ${
-                    goal.completedToday
-                      ? 'bg-accent border-accent'
-                      : 'border-gray-600'
-                  }`}
+                  key={goal.id}
+                  className="w-full p-4 bg-surface rounded-xl border border-white/5"
                 >
-                  {goal.completedToday && <CheckCircle2 size={16} className="text-white pointer-events-none" />}
-                </div>
-                <div className="flex-1 text-left pointer-events-none">
-                  <p className={`font-medium ${goal.completedToday ? 'text-gray-500 line-through' : ''}`}>
-                    {goal.title}
-                  </p>
-                  {goal.time && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <Clock size={12} className="text-gray-500" />
-                      <span className="text-xs text-gray-500">{goal.time}</span>
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                        goal.completedToday
+                          ? 'bg-accent border-accent'
+                          : goal.skippedToday
+                            ? 'bg-red-500/20 border-red-400'
+                            : goal.frozenToday
+                              ? 'bg-cyan-500/20 border-cyan-300'
+                              : 'border-gray-600'
+                      }`}
+                    >
+                      {goal.completedToday && <CheckCircle2 size={16} className="text-white" />}
+                      {goal.skippedToday && <Ban size={14} className="text-red-300" />}
+                      {goal.frozenToday && <Snowflake size={14} className="text-cyan-200" />}
                     </div>
-                  )}
-                </div>
-                {goal.streak > 0 && (
-                  <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/10 rounded-full pointer-events-none">
-                    <Flame size={12} className="text-orange-400" />
-                    <span className="text-xs text-orange-400 font-medium">{goal.streak}</span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`font-medium leading-snug ${goal.completedToday ? 'text-gray-500 line-through' : ''}`}>
+                            {goal.title}
+                          </p>
+
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            <span className="text-[11px] px-2 py-1 rounded-full bg-surface-light text-gray-300">
+                              {getStatusLabel(goal)}
+                            </span>
+
+                            {goal.time && (
+                              <span className="text-[11px] px-2 py-1 rounded-full bg-surface-light text-gray-300 flex items-center gap-1">
+                                <Clock size={11} />
+                                {goal.time}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {goal.goalStreak > 0 && (
+                          <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/10 rounded-full shrink-0">
+                            <Flame size={12} className="text-orange-400" />
+                            <span className="text-xs text-orange-400 font-medium">{goal.goalStreak}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {goal.why && (
+                        <p className="text-sm text-gray-400 mt-3 leading-relaxed">
+                          {goal.why}
+                        </p>
+                      )}
+
+                      <div className="grid grid-cols-3 gap-2 mt-4">
+                        <button
+                          onClick={() => onGoalDone(goal.id)}
+                          disabled={hasTodayStatus}
+                          className="min-h-9 rounded-lg bg-accent text-white text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 active:scale-95 transition-all"
+                        >
+                          <Check size={14} />
+                          Done
+                        </button>
+
+                        <button
+                          onClick={() => onGoalSkip(goal.id)}
+                          disabled={hasTodayStatus}
+                          className="min-h-9 rounded-lg bg-surface-light text-gray-200 text-xs font-medium border border-white/10 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 active:scale-95 transition-all"
+                        >
+                          <Ban size={14} />
+                          Skip
+                        </button>
+
+                        <button
+                          onClick={() => onGoalFreeze(goal.id)}
+                          disabled={!canFreeze}
+                          className="min-h-9 rounded-lg bg-cyan-500/10 text-cyan-200 text-xs font-medium border border-cyan-300/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 active:scale-95 transition-all"
+                        >
+                          <Snowflake size={14} />
+                          Freeze
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       <button
         onClick={() => setShowModal(true)}
