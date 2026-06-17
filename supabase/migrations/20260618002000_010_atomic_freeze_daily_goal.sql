@@ -11,7 +11,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-  v_goal_id uuid;
+  v_has_frequency boolean := false;
+  v_goal_kind text;
   v_active integer := 0;
   v_pending integer := 0;
   v_after_use integer := 0;
@@ -22,16 +23,37 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
-  SELECT g.id
-  INTO v_goal_id
-  FROM public.goals g
-  WHERE g.id = p_goal_id
-    AND g.user_id = p_user_id
-    AND COALESCE(g.active, true) = true
-    AND COALESCE(g.frequency, g.type) = 'daily'
-  FOR SHARE;
+  SELECT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'goals'
+      AND column_name = 'frequency'
+  )
+  INTO v_has_frequency;
 
-  IF v_goal_id IS NULL THEN
+  IF v_has_frequency THEN
+    EXECUTE $sql$
+      SELECT COALESCE(frequency, type)
+      FROM public.goals
+      WHERE id = $1
+        AND user_id = $2
+        AND COALESCE(active, true) = true
+      FOR SHARE
+    $sql$
+    INTO v_goal_kind
+    USING p_goal_id, p_user_id;
+  ELSE
+    SELECT g.type
+    INTO v_goal_kind
+    FROM public.goals g
+    WHERE g.id = p_goal_id
+      AND g.user_id = p_user_id
+      AND COALESCE(g.active, true) = true
+    FOR SHARE;
+  END IF;
+
+  IF v_goal_kind IS DISTINCT FROM 'daily' THEN
     RETURN false;
   END IF;
 
