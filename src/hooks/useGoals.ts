@@ -319,18 +319,6 @@ export function useGoals() {
     }
   };
 
-  const refillStreakFreezes = async () => {
-    if (!user) return;
-
-    const { error } = await supabase.rpc('refill_streak_freezes', {
-      p_user_id: user.id,
-    });
-
-    if (error) {
-      console.error('Error refilling streak freezes:', error);
-    }
-  };
-
   const runAchievementCheck = async () => {
     if (!user) return;
 
@@ -452,14 +440,13 @@ export function useGoals() {
 
       if (insertError) throw insertError;
 
-      const { error: userError } = await supabase
-        .from('users')
-        .update({ streak_freeze_count: freezeCount - 1 })
-        .eq('id', user.id);
+      const { data: consumed, error: consumeError } = await supabase.rpc('consume_streak_freeze', {
+        p_user_id: user.id,
+      });
 
-      if (userError) throw userError;
+      if (consumeError) throw consumeError;
+      if (!consumed) throw new Error('No streak freezes available');
 
-      await refillStreakFreezes();
       await runAchievementCheck();
       await fetchGoals();
     } catch (error) {
