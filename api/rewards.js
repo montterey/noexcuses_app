@@ -11,6 +11,12 @@ function getEnv(name, fallbackName) {
   return process.env[name] || (fallbackName ? process.env[fallbackName] : undefined);
 }
 
+function getBody(req) {
+  if (!req.body) return {};
+  if (typeof req.body === 'string') return JSON.parse(req.body);
+  return req.body;
+}
+
 function timingSafeHexEqual(a, b) {
   const aBuffer = Buffer.from(a, 'hex');
   const bBuffer = Buffer.from(b, 'hex');
@@ -141,7 +147,7 @@ export default async function handler(req, res) {
       throw new Error('Server environment is not configured');
     }
 
-    const { action, initData, goalId, date } = req.body || {};
+    const { action, initData, goalId, date } = getBody(req);
     const telegramUser = verifyTelegramInitData(initData, botToken);
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
