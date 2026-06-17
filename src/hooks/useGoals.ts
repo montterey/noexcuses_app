@@ -455,7 +455,6 @@ export function useGoals() {
     try {
       const result = await callRewardsApi('freezeDailyGoal', {
         goalId,
-        date: getTodayDate(),
       });
 
       if (!result.frozen) return;
