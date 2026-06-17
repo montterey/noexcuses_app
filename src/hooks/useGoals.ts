@@ -422,30 +422,14 @@ export function useGoals() {
     if (!goal || goal.frequency !== 'daily' || goal.displayStatus) return;
 
     try {
-      const existingLog = await fetchTodayLog(goalId);
-      if (existingLog) return;
-
-      const userSnapshot = await fetchUserSnapshot();
-      const freezeCount = Number(userSnapshot?.streak_freeze_count || user.streakFreezeCount || 0);
-
-      if (freezeCount <= 0) return;
-
-      const { error: insertError } = await supabase.from('goal_logs').insert({
-        goal_id: goalId,
-        user_id: user.id,
-        status: 'frozen',
-        date: getTodayDate(),
-        xp_earned: 0,
-      });
-
-      if (insertError) throw insertError;
-
-      const { data: consumed, error: consumeError } = await supabase.rpc('consume_streak_freeze', {
+      const { data: frozen, error: freezeError } = await supabase.rpc('freeze_daily_goal', {
         p_user_id: user.id,
+        p_goal_id: goalId,
+        p_date: getTodayDate(),
       });
 
-      if (consumeError) throw consumeError;
-      if (!consumed) throw new Error('No streak freezes available');
+      if (freezeError) throw freezeError;
+      if (!frozen) return;
 
       await runAchievementCheck();
       await fetchGoals();
