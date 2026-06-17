@@ -295,12 +295,54 @@ export function useGoals() {
     return data;
   };
 
+  const processStreakFreezeRewards = async () => {
+    if (!user) return;
+
+    const { error } = await supabase.rpc('process_streak_freeze_rewards', {
+      p_user_id: user.id,
+    });
+
+    if (error) {
+      console.error('Error processing streak freeze rewards:', error);
+    }
+  };
+
+  const processAchievementFreezeRewards = async () => {
+    if (!user) return;
+
+    const { error } = await supabase.rpc('process_achievement_freeze_rewards', {
+      p_user_id: user.id,
+    });
+
+    if (error) {
+      console.error('Error processing achievement freeze rewards:', error);
+    }
+  };
+
+  const refillStreakFreezes = async () => {
+    if (!user) return;
+
+    const { error } = await supabase.rpc('refill_streak_freezes', {
+      p_user_id: user.id,
+    });
+
+    if (error) {
+      console.error('Error refilling streak freezes:', error);
+    }
+  };
+
   const runAchievementCheck = async () => {
     if (!user) return;
 
-    await supabase.rpc('check_and_unlock_achievements', {
+    const { error } = await supabase.rpc('check_and_unlock_achievements', {
       p_user_id: user.id,
     });
+
+    if (error) {
+      console.error('Error checking achievements:', error);
+    }
+
+    await processAchievementFreezeRewards();
   };
 
   const completeGoal = async (goalId: string) => {
@@ -343,9 +385,12 @@ export function useGoals() {
       if (userError) throw userError;
 
       if (goal.frequency === 'daily') {
-        await supabase.rpc('update_user_streak', {
+        const { error: streakError } = await supabase.rpc('update_user_streak', {
           p_user_id: user.id,
         });
+
+        if (streakError) throw streakError;
+        await processStreakFreezeRewards();
       }
 
       await runAchievementCheck();
@@ -414,6 +459,7 @@ export function useGoals() {
 
       if (userError) throw userError;
 
+      await refillStreakFreezes();
       await runAchievementCheck();
       await fetchGoals();
     } catch (error) {
