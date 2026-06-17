@@ -32,13 +32,30 @@ CREATE TABLE IF NOT EXISTS public.streak_freeze_reward_ledger (
 
 ALTER TABLE public.streak_freeze_reward_ledger ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "streak_freeze_reward_ledger_select" ON public.streak_freeze_reward_ledger FOR SELECT
-  TO authenticated, anon
-  USING (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'streak_freeze_reward_ledger'
+      AND policyname = 'streak_freeze_reward_ledger_select'
+  ) THEN
+    CREATE POLICY "streak_freeze_reward_ledger_select" ON public.streak_freeze_reward_ledger FOR SELECT
+      TO authenticated, anon
+      USING (true);
+  END IF;
 
-CREATE POLICY IF NOT EXISTS "streak_freeze_reward_ledger_insert" ON public.streak_freeze_reward_ledger FOR INSERT
-  TO authenticated, anon
-  WITH CHECK (true);
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'streak_freeze_reward_ledger'
+      AND policyname = 'streak_freeze_reward_ledger_insert'
+  ) THEN
+    CREATE POLICY "streak_freeze_reward_ledger_insert" ON public.streak_freeze_reward_ledger FOR INSERT
+      TO authenticated, anon
+      WITH CHECK (true);
+  END IF;
+END $$;
 
 ALTER TABLE public.achievement_definitions
 ADD COLUMN IF NOT EXISTS code text;
@@ -55,14 +72,14 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'achievement_definitions' AND column_name = 'title'
   ) THEN
-    EXECUTE 'UPDATE public.achievement_definitions SET title_ru = COALESCE(NULLIF(title_ru, ''''), title)';
+    EXECUTE $sql$UPDATE public.achievement_definitions SET title_ru = COALESCE(NULLIF(title_ru, ''), title)$sql$;
   END IF;
 
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'achievement_definitions' AND column_name = 'description'
   ) THEN
-    EXECUTE 'UPDATE public.achievement_definitions SET description_ru = COALESCE(NULLIF(description_ru, ''''), description)';
+    EXECUTE $sql$UPDATE public.achievement_definitions SET description_ru = COALESCE(NULLIF(description_ru, ''), description)$sql$;
   END IF;
 END $$;
 
@@ -89,7 +106,7 @@ SET code = CASE
 END
 WHERE code IS NULL OR code = '';
 
-CREATE UNIQUE INDEX IF NOT EXISTS achievement_definitions_code_key
+CREATE INDEX IF NOT EXISTS achievement_definitions_code_idx
 ON public.achievement_definitions(code)
 WHERE code IS NOT NULL;
 
