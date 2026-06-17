@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const DEFAULT_INIT_DATA_MAX_AGE_SECONDS = 60 * 60 * 24;
+const DEFAULT_APP_TIME_ZONE = 'Europe/Chisinau';
 
 function json(res, statusCode, payload) {
   res.status(statusCode).json(payload);
@@ -15,6 +16,18 @@ function getBody(req) {
   if (!req.body) return {};
   if (typeof req.body === 'string') return JSON.parse(req.body);
   return req.body;
+}
+
+function getTodayDate(timeZone = DEFAULT_APP_TIME_ZONE) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 function timingSafeHexEqual(a, b) {
@@ -116,7 +129,7 @@ async function checkAchievementsAndProcessRewards(supabase, userId) {
   return processAchievementRewards(supabase, userId);
 }
 
-async function freezeDailyGoal(supabase, userId, goalId, date) {
+async function freezeDailyGoal(supabase, userId, goalId) {
   if (!goalId || typeof goalId !== 'string') {
     throw new Error('Goal id is missing');
   }
@@ -124,7 +137,7 @@ async function freezeDailyGoal(supabase, userId, goalId, date) {
   const { data, error } = await supabase.rpc('freeze_daily_goal', {
     p_user_id: userId,
     p_goal_id: goalId,
-    p_date: date || new Date().toISOString().slice(0, 10),
+    p_date: getTodayDate(process.env.APP_TIME_ZONE || DEFAULT_APP_TIME_ZONE),
   });
 
   if (error) throw error;
@@ -147,7 +160,7 @@ export default async function handler(req, res) {
       throw new Error('Server environment is not configured');
     }
 
-    const { action, initData, goalId, date } = getBody(req);
+    const { action, initData, goalId } = getBody(req);
     const telegramUser = verifyTelegramInitData(initData, botToken);
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
@@ -158,7 +171,7 @@ export default async function handler(req, res) {
     const userId = await resolveUserId(supabase, telegramUser);
 
     if (action === 'freezeDailyGoal') {
-      const frozen = await freezeDailyGoal(supabase, userId, goalId, date);
+      const frozen = await freezeDailyGoal(supabase, userId, goalId);
       const achievementRewards = frozen
         ? await checkAchievementsAndProcessRewards(supabase, userId)
         : 0;
