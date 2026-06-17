@@ -18,6 +18,14 @@ type AddGoalResult = {
   error?: string;
 };
 
+type RewardAction = 'freezeDailyGoal' | 'processStreakRewards' | 'checkAchievementsAndProcessRewards';
+
+type RewardApiResult = {
+  success: boolean;
+  frozen?: boolean;
+  error?: string;
+};
+
 function getErrorMessage(error: unknown) {
   if (error && typeof error === 'object' && 'message' in error) {
     return String((error as { message?: unknown }).message || '');
@@ -113,6 +121,10 @@ function getOnceDeadline(goal: Record<string, any>) {
 
 function getPostponeDeadline() {
   return addHours(new Date(), ONCE_GOAL_VISIBLE_HOURS).toISOString();
+}
+
+function getTelegramInitData() {
+  return window.Telegram?.WebApp?.initData || '';
 }
 
 export function useGoals() {
@@ -295,14 +307,43 @@ export function useGoals() {
     return data;
   };
 
+  const callRewardsApi = async (
+    action: RewardAction,
+    payload: Record<string, unknown> = {}
+  ): Promise<RewardApiResult> => {
+    const initData = getTelegramInitData();
+
+    if (!initData) {
+      throw new Error('Telegram initData is missing');
+    }
+
+    const response = await fetch('/api/rewards', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action,
+        initData,
+        ...payload,
+      }),
+    });
+
+    const result = await response.json().catch(() => ({})) as RewardApiResult;
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Reward request failed');
+    }
+
+    return result;
+  };
+
   const processStreakFreezeRewards = async () => {
     if (!user) return;
 
-    const { error } = await supabase.rpc('process_streak_freeze_rewards', {
-      p_user_id: user.id,
-    });
-
-    if (error) {
+    try {
+      await callRewardsApi('processStreakRewards');
+    } catch (error) {
       console.error('Error processing streak freeze rewards:', error);
     }
   };
@@ -310,25 +351,15 @@ export function useGoals() {
   const processAchievementFreezeRewards = async () => {
     if (!user) return;
 
-    const { error } = await supabase.rpc('process_achievement_freeze_rewards', {
-      p_user_id: user.id,
-    });
-
-    if (error) {
+    try {
+      await callRewardsApi('checkAchievementsAndProcessRewards');
+    } catch (error) {
       console.error('Error processing achievement freeze rewards:', error);
     }
   };
 
   const runAchievementCheck = async () => {
     if (!user) return;
-
-    const { error } = await supabase.rpc('check_and_unlock_achievements', {
-      p_user_id: user.id,
-    });
-
-    if (error) {
-      console.error('Error checking achievements:', error);
-    }
 
     await processAchievementFreezeRewards();
   };
@@ -422,16 +453,13 @@ export function useGoals() {
     if (!goal || goal.frequency !== 'daily' || goal.displayStatus) return;
 
     try {
-      const { data: frozen, error: freezeError } = await supabase.rpc('freeze_daily_goal', {
-        p_user_id: user.id,
-        p_goal_id: goalId,
-        p_date: getTodayDate(),
+      const result = await callRewardsApi('freezeDailyGoal', {
+        goalId,
+        date: getTodayDate(),
       });
 
-      if (freezeError) throw freezeError;
-      if (!frozen) return;
+      if (!result.frozen) return;
 
-      await runAchievementCheck();
       await fetchGoals();
     } catch (error) {
       console.error('Error freezing goal:', error);
