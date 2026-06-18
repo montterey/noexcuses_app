@@ -18,6 +18,14 @@ type AddGoalResult = {
   error?: string;
 };
 
+type RewardAction = 'freezeDailyGoal' | 'processStreakRewards' | 'checkAchievementsAndProcessRewards';
+
+type RewardApiResult = {
+  success: boolean;
+  frozen?: boolean;
+  error?: string;
+};
+
 function getErrorMessage(error: unknown) {
   if (error && typeof error === 'object' && 'message' in error) {
     return String((error as { message?: unknown }).message || '');
@@ -113,6 +121,10 @@ function getOnceDeadline(goal: Record<string, any>) {
 
 function getPostponeDeadline() {
   return addHours(new Date(), ONCE_GOAL_VISIBLE_HOURS).toISOString();
+}
+
+function getTelegramInitData() {
+  return window.Telegram?.WebApp?.initData || '';
 }
 
 export function useGoals() {
@@ -295,12 +307,61 @@ export function useGoals() {
     return data;
   };
 
+  const callRewardsApi = async (
+    action: RewardAction,
+    payload: Record<string, unknown> = {}
+  ): Promise<RewardApiResult> => {
+    const initData = getTelegramInitData();
+
+    if (!initData) {
+      throw new Error('Telegram initData is missing');
+    }
+
+    const response = await fetch('/api/rewards', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action,
+        initData,
+        ...payload,
+      }),
+    });
+
+    const result = await response.json().catch(() => ({})) as RewardApiResult;
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Reward request failed');
+    }
+
+    return result;
+  };
+
+  const processStreakFreezeRewards = async () => {
+    if (!user) return;
+
+    try {
+      await callRewardsApi('processStreakRewards');
+    } catch (error) {
+      console.error('Error processing streak freeze rewards:', error);
+    }
+  };
+
+  const processAchievementFreezeRewards = async () => {
+    if (!user) return;
+
+    try {
+      await callRewardsApi('checkAchievementsAndProcessRewards');
+    } catch (error) {
+      console.error('Error processing achievement freeze rewards:', error);
+    }
+  };
+
   const runAchievementCheck = async () => {
     if (!user) return;
 
-    await supabase.rpc('check_and_unlock_achievements', {
-      p_user_id: user.id,
-    });
+    await processAchievementFreezeRewards();
   };
 
   const completeGoal = async (goalId: string) => {
@@ -343,9 +404,12 @@ export function useGoals() {
       if (userError) throw userError;
 
       if (goal.frequency === 'daily') {
-        await supabase.rpc('update_user_streak', {
+        const { error: streakError } = await supabase.rpc('update_user_streak', {
           p_user_id: user.id,
         });
+
+        if (streakError) throw streakError;
+        await processStreakFreezeRewards();
       }
 
       await runAchievementCheck();
@@ -389,32 +453,12 @@ export function useGoals() {
     if (!goal || goal.frequency !== 'daily' || goal.displayStatus) return;
 
     try {
-      const existingLog = await fetchTodayLog(goalId);
-      if (existingLog) return;
-
-      const userSnapshot = await fetchUserSnapshot();
-      const freezeCount = Number(userSnapshot?.streak_freeze_count || user.streakFreezeCount || 0);
-
-      if (freezeCount <= 0) return;
-
-      const { error: insertError } = await supabase.from('goal_logs').insert({
-        goal_id: goalId,
-        user_id: user.id,
-        status: 'frozen',
-        date: getTodayDate(),
-        xp_earned: 0,
+      const result = await callRewardsApi('freezeDailyGoal', {
+        goalId,
       });
 
-      if (insertError) throw insertError;
+      if (!result.frozen) return;
 
-      const { error: userError } = await supabase
-        .from('users')
-        .update({ streak_freeze_count: freezeCount - 1 })
-        .eq('id', user.id);
-
-      if (userError) throw userError;
-
-      await runAchievementCheck();
       await fetchGoals();
     } catch (error) {
       console.error('Error freezing goal:', error);
