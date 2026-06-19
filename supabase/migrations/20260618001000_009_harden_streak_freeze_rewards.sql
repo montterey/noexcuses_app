@@ -1,125 +1,51 @@
--- Harden streak freeze reward access before merge.
--- Client writes to the reward ledger are forbidden; user-facing RPCs verify auth.uid().
+-- Backfill through the idempotent ledger, then require service_role for runtime mutations.
 
-DROP POLICY IF EXISTS "streak_freeze_reward_ledger_select" ON public.streak_freeze_reward_ledger;
-DROP POLICY IF EXISTS "streak_freeze_reward_ledger_insert" ON public.streak_freeze_reward_ledger;
-DROP POLICY IF EXISTS "streak_freeze_reward_ledger_update" ON public.streak_freeze_reward_ledger;
-DROP POLICY IF EXISTS "streak_freeze_reward_ledger_delete" ON public.streak_freeze_reward_ledger;
+DO $$
+DECLARE
+  v_user record;
+  v_achievement record;
+  v_milestone integer;
+BEGIN
+  FOR v_user IN SELECT id, COALESCE(streak, 0) AS streak FROM public.users LOOP
+    v_milestone := 7;
 
-CREATE POLICY "streak_freeze_reward_ledger_select_own" ON public.streak_freeze_reward_ledger FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id);
+    WHILE v_milestone <= v_user.streak LOOP
+      PERFORM public.grant_streak_freezes(
+        v_user.id,
+        'streak_milestone',
+        v_milestone::text,
+        1
+      );
+      v_milestone := v_milestone + 7;
+    END LOOP;
 
-REVOKE INSERT, UPDATE, DELETE ON public.streak_freeze_reward_ledger FROM anon, authenticated;
+    FOR v_achievement IN
+      SELECT DISTINCT ua.achievement_id::text AS achievement_id
+      FROM public.user_achievements ua
+      WHERE ua.user_id = v_user.id
+    LOOP
+      PERFORM public.process_achievement_freeze_reward(
+        v_user.id,
+        v_achievement.achievement_id
+      );
+    END LOOP;
 
-CREATE OR REPLACE FUNCTION public.assert_reward_rpc_user(
-  p_user_id uuid
-)
+    PERFORM public.refill_streak_freezes(v_user.id);
+  END LOOP;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.assert_reward_service_role()
 RETURNS void
 LANGUAGE plpgsql
 STABLE
+SET search_path = public, pg_temp
 AS $$
 BEGIN
-  IF auth.role() = 'service_role' THEN
-    RETURN;
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'Reward mutations require service_role'
+      USING ERRCODE = '42501';
   END IF;
-
-  IF auth.uid() = p_user_id THEN
-    RETURN;
-  END IF;
-
-  RAISE EXCEPTION 'Not allowed to process rewards for this user'
-    USING ERRCODE = '42501';
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.grant_streak_freezes(
-  p_user_id uuid,
-  p_source text,
-  p_reward_key text,
-  p_amount integer
-)
-RETURNS boolean
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_inserted boolean := false;
-  v_active integer := 0;
-  v_pending integer := 0;
-  v_active_grant integer := 0;
-  v_pending_grant integer := 0;
-BEGIN
-  IF p_user_id IS NULL OR p_amount IS NULL OR p_amount <= 0 THEN
-    RETURN false;
-  END IF;
-
-  INSERT INTO public.streak_freeze_reward_ledger (user_id, source, reward_key, amount)
-  VALUES (p_user_id, p_source, p_reward_key, p_amount)
-  ON CONFLICT (user_id, source, reward_key) DO NOTHING
-  RETURNING true INTO v_inserted;
-
-  IF NOT COALESCE(v_inserted, false) THEN
-    RETURN false;
-  END IF;
-
-  SELECT COALESCE(streak_freeze_count, 0), COALESCE(streak_freeze_pending_count, 0)
-  INTO v_active, v_pending
-  FROM public.users
-  WHERE id = p_user_id
-  FOR UPDATE;
-
-  v_active_grant := LEAST(GREATEST(3 - v_active, 0), p_amount);
-  v_pending_grant := p_amount - v_active_grant;
-
-  UPDATE public.users
-  SET
-    streak_freeze_count = LEAST(3, v_active + v_active_grant),
-    streak_freeze_pending_count = v_pending + v_pending_grant,
-    updated_at = now()
-  WHERE id = p_user_id;
-
-  UPDATE public.streak_freeze_reward_ledger
-  SET active_granted = v_active_grant,
-      pending_granted = v_pending_grant
-  WHERE user_id = p_user_id
-    AND source = p_source
-    AND reward_key = p_reward_key;
-
-  RETURN true;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION public.refill_streak_freezes(
-  p_user_id uuid
-)
-RETURNS integer
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_active integer := 0;
-  v_pending integer := 0;
-  v_refill integer := 0;
-BEGIN
-  SELECT COALESCE(streak_freeze_count, 0), COALESCE(streak_freeze_pending_count, 0)
-  INTO v_active, v_pending
-  FROM public.users
-  WHERE id = p_user_id
-  FOR UPDATE;
-
-  v_refill := LEAST(GREATEST(3 - v_active, 0), v_pending);
-
-  IF v_refill > 0 THEN
-    UPDATE public.users
-    SET
-      streak_freeze_count = v_active + v_refill,
-      streak_freeze_pending_count = v_pending - v_refill,
-      updated_at = now()
-    WHERE id = p_user_id;
-  END IF;
-
-  RETURN v_refill;
 END;
 $$;
 
@@ -129,6 +55,7 @@ CREATE OR REPLACE FUNCTION public.consume_streak_freeze(
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_active integer := 0;
@@ -136,26 +63,25 @@ DECLARE
   v_after_use integer := 0;
   v_refill integer := 0;
 BEGIN
-  PERFORM public.assert_reward_rpc_user(p_user_id);
+  PERFORM public.assert_reward_service_role();
 
-  SELECT COALESCE(streak_freeze_count, 0), COALESCE(streak_freeze_pending_count, 0)
+  SELECT streak_freeze_count, streak_freeze_pending_count
   INTO v_active, v_pending
   FROM public.users
   WHERE id = p_user_id
   FOR UPDATE;
 
-  IF v_active <= 0 THEN
+  IF NOT FOUND OR v_active <= 0 THEN
     RETURN false;
   END IF;
 
-  v_after_use := v_active - 1;
+  v_after_use := GREATEST(v_active - 1, 0);
   v_refill := LEAST(GREATEST(3 - v_after_use, 0), v_pending);
 
   UPDATE public.users
   SET
     streak_freeze_count = v_after_use + v_refill,
-    streak_freeze_pending_count = v_pending - v_refill,
-    updated_at = now()
+    streak_freeze_pending_count = v_pending - v_refill
   WHERE id = p_user_id;
 
   RETURN true;
@@ -168,13 +94,14 @@ CREATE OR REPLACE FUNCTION public.process_streak_freeze_rewards(
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_streak integer := 0;
   v_milestone integer := 7;
   v_granted_count integer := 0;
 BEGIN
-  PERFORM public.assert_reward_rpc_user(p_user_id);
+  PERFORM public.assert_reward_service_role();
 
   SELECT COALESCE(streak, 0)
   INTO v_streak
@@ -182,7 +109,12 @@ BEGIN
   WHERE id = p_user_id;
 
   WHILE v_milestone <= v_streak LOOP
-    IF public.grant_streak_freezes(p_user_id, 'streak_milestone', v_milestone::text, 1) THEN
+    IF public.grant_streak_freezes(
+      p_user_id,
+      'streak_milestone',
+      v_milestone::text,
+      1
+    ) THEN
       v_granted_count := v_granted_count + 1;
     END IF;
 
@@ -194,72 +126,49 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.process_achievement_freeze_reward(
-  p_user_id uuid,
-  p_achievement_id uuid
-)
-RETURNS integer
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-DECLARE
-  v_code text;
-  v_title text;
-  v_amount integer := 0;
-  v_key text;
-BEGIN
-  SELECT code, title_ru
-  INTO v_code, v_title
-  FROM public.achievement_definitions
-  WHERE id = p_achievement_id;
-
-  v_amount := public.get_achievement_freeze_reward_amount(v_code, v_title);
-
-  IF v_amount <= 0 THEN
-    RETURN 0;
-  END IF;
-
-  v_key := COALESCE(NULLIF(v_code, ''), p_achievement_id::text);
-
-  IF public.grant_streak_freezes(p_user_id, 'achievement', v_key, v_amount) THEN
-    PERFORM public.refill_streak_freezes(p_user_id);
-    RETURN v_amount;
-  END IF;
-
-  RETURN 0;
-END;
-$$;
-
 CREATE OR REPLACE FUNCTION public.process_achievement_freeze_rewards(
   p_user_id uuid
 )
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_total integer := 0;
   v_row record;
 BEGIN
-  PERFORM public.assert_reward_rpc_user(p_user_id);
+  PERFORM public.assert_reward_service_role();
 
   FOR v_row IN
-    SELECT ua.achievement_id
+    SELECT DISTINCT ua.achievement_id::text AS achievement_id
     FROM public.user_achievements ua
     WHERE ua.user_id = p_user_id
   LOOP
-    v_total := v_total + public.process_achievement_freeze_reward(p_user_id, v_row.achievement_id);
+    v_total := v_total + public.process_achievement_freeze_reward(
+      p_user_id,
+      v_row.achievement_id
+    );
   END LOOP;
 
   RETURN v_total;
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION public.assert_reward_rpc_user(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.assert_reward_service_role() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.get_achievement_freeze_reward_amount(text) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.grant_streak_freezes(uuid, text, text, integer) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.refill_streak_freezes(uuid) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.process_achievement_freeze_reward(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.process_achievement_freeze_reward(uuid, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.consume_streak_freeze(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.process_streak_freeze_rewards(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.process_achievement_freeze_rewards(uuid) FROM PUBLIC, anon, authenticated;
 
-GRANT EXECUTE ON FUNCTION public.consume_streak_freeze(uuid) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.process_streak_freeze_rewards(uuid) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.process_achievement_freeze_rewards(uuid) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.consume_streak_freeze(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.process_streak_freeze_rewards(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.process_achievement_freeze_rewards(uuid) TO service_role;
+
+-- Keep the ledger read-only for clients even if this migration is applied repeatedly.
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
+  ON public.streak_freeze_reward_ledger
+  FROM anon, authenticated;
