@@ -3,7 +3,6 @@ import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { Goal, GoalFrequency, GoalLogStatus } from '../types';
 
-const GOAL_XP_REWARD = 10;
 const ONCE_GOAL_VISIBLE_HOURS = 24;
 
 interface GoalLogRow {
@@ -18,11 +17,22 @@ type AddGoalResult = {
   error?: string;
 };
 
-type RewardAction = 'freezeDailyGoal' | 'processStreakRewards' | 'checkAchievementsAndProcessRewards';
+type RewardAction =
+  | 'completeGoal'
+  | 'skipGoal'
+  | 'freezeDailyGoal'
+  | 'processStreakRewards'
+  | 'checkAchievementsAndProcessRewards';
 
 type RewardApiResult = {
   success: boolean;
   frozen?: boolean;
+  result?: {
+    applied?: boolean;
+    status?: string;
+    xp_awarded?: number;
+    challenge_updates?: number;
+  };
   error?: string;
 };
 
@@ -39,18 +49,20 @@ function getErrorMessage(error: unknown) {
 }
 
 function shouldTryMinimalGoalInsert(error: unknown) {
-  const errorRecord = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const errorRecord = error && typeof error === 'object'
+    ? error as Record<string, unknown>
+    : {};
   const code = String(errorRecord.code || '');
   const message = getErrorMessage(error).toLowerCase();
 
   return (
-    ['22P02', '42703', '42804', 'PGRST102', 'PGRST204'].includes(code) ||
-    message.includes('schema') ||
-    message.includes('column') ||
-    message.includes('type') ||
-    message.includes('invalid input syntax') ||
-    message.includes('could not find') ||
-    message.includes('schema cache')
+    ['22P02', '42703', '42804', 'PGRST102', 'PGRST204'].includes(code)
+    || message.includes('schema')
+    || message.includes('column')
+    || message.includes('type')
+    || message.includes('invalid input syntax')
+    || message.includes('could not find')
+    || message.includes('schema cache')
   );
 }
 
@@ -98,7 +110,11 @@ function calculateGoalStreak(logs: Array<{ date: string; status: string | null }
 
   const today = getTodayDate();
   const yesterday = addDays(today, -1);
-  let cursor = streakDates.has(today) ? today : streakDates.has(yesterday) ? yesterday : null;
+  let cursor = streakDates.has(today)
+    ? today
+    : streakDates.has(yesterday)
+      ? yesterday
+      : null;
   let streak = 0;
 
   while (cursor && streakDates.has(cursor)) {
@@ -107,10 +123,6 @@ function calculateGoalStreak(logs: Array<{ date: string; status: string | null }
   }
 
   return streak;
-}
-
-function getNextLevel(xp: number) {
-  return Math.floor(xp / 150) + 1;
 }
 
 function getOnceDeadline(goal: Record<string, any>) {
@@ -151,7 +163,9 @@ export function useGoals() {
       const visibleGoals = (goalsData || []).filter((goal) => {
         const frequency = normalizeGoalFrequency(goal.frequency || goal.type);
         const isPaused = Boolean(goal.paused);
-        const snoozedDaily = frequency === 'daily' && goal.snooze_until && !isPast(goal.snooze_until);
+        const snoozedDaily = frequency === 'daily'
+          && goal.snooze_until
+          && !isPast(goal.snooze_until);
         return !isPaused && !snoozedDaily;
       });
 
@@ -230,14 +244,19 @@ export function useGoals() {
               createdAt: goal.created_at || null,
               completedAt: latestDoneLog.created_at || null,
               deadlineAt: latestDoneLog.created_at
-                ? addHours(new Date(latestDoneLog.created_at), ONCE_GOAL_VISIBLE_HOURS).toISOString()
+                ? addHours(
+                  new Date(latestDoneLog.created_at),
+                  ONCE_GOAL_VISIBLE_HOURS
+                ).toISOString()
                 : null,
               snoozeUntil: goal.snooze_until || null,
             };
           }
 
           const onceDeadline = frequency === 'once' ? getOnceDeadline(goal) : null;
-          const isOverdue = frequency === 'once' && Boolean(onceDeadline) && isPast(onceDeadline);
+          const isOverdue = frequency === 'once'
+            && Boolean(onceDeadline)
+            && isPast(onceDeadline);
           const displayStatus = isOverdue ? 'overdue' : todayLog?.status || null;
 
           return {
@@ -279,34 +298,6 @@ export function useGoals() {
     fetchGoals();
   }, [fetchGoals]);
 
-  const fetchTodayLog = async (goalId: string) => {
-    if (!user) return null;
-
-    const { data, error } = await supabase
-      .from('goal_logs')
-      .select('id, status')
-      .eq('user_id', user.id)
-      .eq('goal_id', goalId)
-      .eq('date', getTodayDate())
-      .limit(1);
-
-    if (error) throw error;
-    return data?.[0] || null;
-  };
-
-  const fetchUserSnapshot = async () => {
-    if (!user) return null;
-
-    const { data, error } = await supabase
-      .from('users')
-      .select('xp, level, xp_this_week, streak_freeze_count, total_goals_completed')
-      .eq('id', user.id)
-      .single();
-
-    if (error) throw error;
-    return data;
-  };
-
   const callRewardsApi = async (
     action: RewardAction,
     payload: Record<string, unknown> = {}
@@ -338,32 +329,6 @@ export function useGoals() {
     return result;
   };
 
-  const processStreakFreezeRewards = async () => {
-    if (!user) return;
-
-    try {
-      await callRewardsApi('processStreakRewards');
-    } catch (error) {
-      console.error('Error processing streak freeze rewards:', error);
-    }
-  };
-
-  const processAchievementFreezeRewards = async () => {
-    if (!user) return;
-
-    try {
-      await callRewardsApi('checkAchievementsAndProcessRewards');
-    } catch (error) {
-      console.error('Error processing achievement freeze rewards:', error);
-    }
-  };
-
-  const runAchievementCheck = async () => {
-    if (!user) return;
-
-    await processAchievementFreezeRewards();
-  };
-
   const completeGoal = async (goalId: string) => {
     if (!user) return;
 
@@ -371,48 +336,7 @@ export function useGoals() {
     if (!goal || goal.displayStatus) return;
 
     try {
-      const existingLog = await fetchTodayLog(goalId);
-      if (existingLog) return;
-
-      const today = getTodayDate();
-      const { error: insertError } = await supabase.from('goal_logs').insert({
-        goal_id: goalId,
-        user_id: user.id,
-        status: 'done',
-        date: today,
-        xp_earned: GOAL_XP_REWARD,
-      });
-
-      if (insertError) throw insertError;
-
-      const userSnapshot = await fetchUserSnapshot();
-      const nextXp = Number(userSnapshot?.xp || user.xp || 0) + GOAL_XP_REWARD;
-      const nextTotalCompleted = Number(
-        userSnapshot?.total_goals_completed || user.totalGoalsCompleted || 0
-      ) + 1;
-
-      const { error: userError } = await supabase
-        .from('users')
-        .update({
-          xp: nextXp,
-          level: getNextLevel(nextXp),
-          xp_this_week: Number(userSnapshot?.xp_this_week || user.xpThisWeek || 0) + GOAL_XP_REWARD,
-          total_goals_completed: nextTotalCompleted,
-        })
-        .eq('id', user.id);
-
-      if (userError) throw userError;
-
-      if (goal.frequency === 'daily') {
-        const { error: streakError } = await supabase.rpc('update_user_streak', {
-          p_user_id: user.id,
-        });
-
-        if (streakError) throw streakError;
-        await processStreakFreezeRewards();
-      }
-
-      await runAchievementCheck();
+      await callRewardsApi('completeGoal', { goalId });
       await fetchGoals();
     } catch (error) {
       console.error('Error completing goal:', error);
@@ -426,20 +350,7 @@ export function useGoals() {
     if (!goal || goal.frequency !== 'daily' || goal.displayStatus) return;
 
     try {
-      const existingLog = await fetchTodayLog(goalId);
-      if (existingLog) return;
-
-      const { error } = await supabase.from('goal_logs').insert({
-        goal_id: goalId,
-        user_id: user.id,
-        status: 'skipped',
-        date: getTodayDate(),
-        xp_earned: 0,
-      });
-
-      if (error) throw error;
-
-      await runAchievementCheck();
+      await callRewardsApi('skipGoal', { goalId });
       await fetchGoals();
     } catch (error) {
       console.error('Error skipping goal:', error);
@@ -453,12 +364,8 @@ export function useGoals() {
     if (!goal || goal.frequency !== 'daily' || goal.displayStatus) return;
 
     try {
-      const result = await callRewardsApi('freezeDailyGoal', {
-        goalId,
-      });
-
+      const result = await callRewardsApi('freezeDailyGoal', { goalId });
       if (!result.frozen) return;
-
       await fetchGoals();
     } catch (error) {
       console.error('Error freezing goal:', error);
