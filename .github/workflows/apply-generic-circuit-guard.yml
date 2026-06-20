@@ -1,0 +1,161 @@
+name: Apply generic circuit guard
+
+on:
+  push:
+    branches:
+      - fix/fitness-circuit-order
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply precise queue guard
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          component = Path('src/components/ProgramDetail.tsx')
+          source = component.read_text(encoding='utf-8')
+
+          marker = """function buildWorkoutQueue(
+            exercises: ProgramExercise[],
+            interleaveSets = false
+          ): WorkoutQueueItem[] {
+          """
+
+          helper = """function shouldInterleaveProgramSets(
+            programCode: ProgramCode,
+            programDay: number,
+            exercises: ProgramExercise[]
+          ) {
+            if (programCode === 'fitness') return programDay >= 5;
+
+            const nonTaskExercises = exercises.filter(
+              (exercise) => exercise.type !== 'task'
+            );
+
+            return nonTaskExercises.length > 1
+              && nonTaskExercises.some((exercise) => getTotalSets(exercise) > 1);
+          }
+
+          function buildWorkoutQueue(
+            exercises: ProgramExercise[],
+            interleaveSets = false
+          ): WorkoutQueueItem[] {
+          """
+
+          if marker not in source:
+            raise SystemExit('Workout queue marker not found')
+          source = source.replace(marker, helper, 1)
+
+          old_selector = """  const programDay = dayContent?.day_number || currentDay;
+            const shouldInterleaveSets =
+              (programCode === 'fitness' && programDay >= 5)
+              || programCode === 'running';
+            const queue = dayContent
+              ? buildWorkoutQueue(dayContent.exercises, shouldInterleaveSets)
+              : [];
+          """
+
+          new_selector = """  const programDay = dayContent?.day_number || currentDay;
+            const shouldInterleaveSets = dayContent
+              ? shouldInterleaveProgramSets(programCode, programDay, dayContent.exercises)
+              : false;
+            const queue = dayContent
+              ? buildWorkoutQueue(dayContent.exercises, shouldInterleaveSets)
+              : [];
+          """
+
+          if old_selector not in source:
+            raise SystemExit('Queue selector not found')
+          source = source.replace(old_selector, new_selector, 1)
+          component.write_text(source, encoding='utf-8')
+
+          Path('tests/fitness-circuit-order.test.js').write_text("""import assert from 'node:assert/strict';
+          import { readFile } from 'node:fs/promises';
+          import test from 'node:test';
+
+          const source = await readFile(
+            new URL('../src/components/ProgramDetail.tsx', import.meta.url),
+            'utf8'
+          );
+
+          test('fitness days 5-30 use circuit ordering', () => {
+            assert.match(source, /programCode === 'fitness'\) return programDay >= 5/);
+            assert.match(
+              source,
+              /shouldInterleaveProgramSets\(programCode, programDay, dayContent\.exercises\)/
+            );
+          });
+
+          test('other programs interleave only real multi-set exercise sequences', () => {
+            const helperStart = source.indexOf('function shouldInterleaveProgramSets');
+            const helperEnd = source.indexOf('function buildWorkoutQueue');
+            const helper = source.slice(helperStart, helperEnd);
+
+            assert.match(helper, /exercise\.type !== 'task'/);
+            assert.match(helper, /nonTaskExercises\.length > 1/);
+            assert.match(helper, /getTotalSets\(exercise\) > 1/);
+          });
+
+          test('sleep and reading task-only days remain sequential', () => {
+            assert.match(source, /exercise\.type === 'task'[\s\S]*?\? 1/);
+            assert.doesNotMatch(source, /programCode === 'sleep'.*return true/);
+            assert.doesNotMatch(source, /programCode === 'reading'.*return true/);
+          });
+
+          test('circuit queue alternates exercises before moving to the next set', () => {
+            const builderStart = source.indexOf('function buildWorkoutQueue');
+            const builderEnd = source.indexOf('function normalizeExerciseName');
+            const builder = source.slice(builderStart, builderEnd);
+            const outerSetLoop = builder.indexOf('for (let set = 1; set <= maxSets; set++)');
+            const innerExerciseLoop = builder.indexOf(
+              'for (const { exercise, totalSets } of exercisesWithSets)'
+            );
+
+            assert.notEqual(outerSetLoop, -1);
+            assert.notEqual(innerExerciseLoop, -1);
+            assert.ok(outerSetLoop < innerExerciseLoop);
+          });
+
+          test('fitness days 1-4 keep the existing sequential order', () => {
+            assert.match(source, /if \(!interleaveSets\)/);
+            assert.match(source, /programCode === 'fitness'\) return programDay >= 5/);
+          });
+          """, encoding='utf-8')
+
+          Path('.github/workflows/apply-generic-circuit-guard.yml').unlink()
+          Path('.github/trigger-generic-circuit-guard.txt').unlink(missing_ok=True)
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint changed files
+        run: npx eslint src/components/ProgramDetail.tsx tests/fitness-circuit-order.test.js
+
+      - name: Run tests
+        run: npm test
+
+      - name: Commit tested guard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Guard circuit ordering across programs"
+          git push origin HEAD:fix/fitness-circuit-order
