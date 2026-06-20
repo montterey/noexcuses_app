@@ -10,7 +10,9 @@ on:
       - 'src/hooks/useGoals.ts'
       - 'src/hooks/usePrograms.ts'
       - 'supabase/migrations/20260620170000_014_verified_activity_and_challenge_scoring.sql'
+      - 'supabase/migrations/20260620173000_015_once_goal_completion_hardening.sql'
       - 'supabase/tests/verified_activity_and_scoring.sql'
+      - 'supabase/tests/once_goal_completion_hardening.sql'
       - 'tests/verified-activity.test.js'
       - 'tests/rewards-api.test.js'
       - '.github/workflows/validate-verified-activity.yml'
@@ -150,6 +152,9 @@ jobs:
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620010000_012_atomic_running_program_completion.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620150000_013_challenges_backend_foundation.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620170000_014_verified_activity_and_challenge_scoring.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620173000_015_once_goal_completion_hardening.sql
 
       - name: Run SQL scoring tests
-        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/verified_activity_and_scoring.sql
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/verified_activity_and_scoring.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/once_goal_completion_hardening.sql
