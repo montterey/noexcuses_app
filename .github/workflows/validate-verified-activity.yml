@@ -40,19 +40,10 @@ jobs:
 
       - name: Run each Node test file
         run: |
-          mkdir -p artifacts
-          : > artifacts/node-test.log
-          failed=0
           for test_file in tests/*.test.js; do
-            echo "Running ${test_file}" | tee -a artifacts/node-test.log
-            if ! node --test "${test_file}" >> artifacts/node-test.log 2>&1; then
-              echo "FAILED_FILE=${test_file}" | tee -a artifacts/node-test.log
-              failed=1
-              break
-            fi
+            echo "Running ${test_file}"
+            node --test "${test_file}"
           done
-          cat artifacts/node-test.log
-          exit ${failed}
 
       - name: Check API syntax
         run: |
@@ -77,72 +68,6 @@ jobs:
       PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build zero-downtime migration split
-        run: |
-          mkdir -p artifacts
-          python3 - <<'PY'
-          from pathlib import Path
-
-          source_path = Path('supabase/migrations/20260620170000_014_verified_activity_and_challenge_scoring.sql')
-          source = source_path.read_text(encoding='utf-8')
-
-          start_marker = 'REVOKE INSERT,UPDATE,DELETE ON public.goal_logs FROM anon,authenticated;'
-          end_marker = 'FOR EACH ROW EXECUTE FUNCTION public.protect_user_progress_fields();\n\n'
-          start = source.index(start_marker)
-          end = source.index(end_marker, start) + len(end_marker)
-
-          additive = (
-              source[:start]
-              + '-- Legacy client write locking is enabled after production deployment by migration 016.\n\n'
-              + source[end:]
-          )
-          additive = additive.replace(
-              'REVOKE ALL ON FUNCTION public.protect_user_progress_fields() FROM PUBLIC,anon,authenticated;\n',
-              '',
-              1,
-          )
-
-          lock_sql = '''-- Apply only after PR #13 is merged and the production Vercel deployment is successful.
-          -- This removes the legacy client write paths after the new API is live.
-          REVOKE INSERT,UPDATE,DELETE ON public.goal_logs FROM anon,authenticated;
-          REVOKE INSERT,UPDATE,DELETE ON public.user_programs FROM anon,authenticated;
-          REVOKE INSERT,UPDATE,DELETE ON public.program_day_completions FROM anon,authenticated;
-          GRANT SELECT ON public.goal_logs,public.user_programs,public.program_day_completions TO anon,authenticated;
-
-          CREATE OR REPLACE FUNCTION public.protect_user_progress_fields()
-          RETURNS trigger
-          LANGUAGE plpgsql
-          SET search_path=public,pg_temp
-          AS $$
-          BEGIN
-            IF auth.role() IS DISTINCT FROM 'service_role' AND (
-              NEW.xp IS DISTINCT FROM OLD.xp
-              OR NEW.level IS DISTINCT FROM OLD.level
-              OR NEW.xp_this_week IS DISTINCT FROM OLD.xp_this_week
-              OR NEW.total_goals_completed IS DISTINCT FROM OLD.total_goals_completed
-              OR NEW.streak IS DISTINCT FROM OLD.streak
-              OR NEW.longest_streak IS DISTINCT FROM OLD.longest_streak
-              OR NEW.streak_freeze_count IS DISTINCT FROM OLD.streak_freeze_count
-              OR NEW.streak_freeze_pending_count IS DISTINCT FROM OLD.streak_freeze_pending_count
-            ) THEN
-              RAISE EXCEPTION 'progress fields are server managed' USING ERRCODE='42501';
-            END IF;
-            RETURN NEW;
-          END $$;
-
-          DROP TRIGGER IF EXISTS protect_user_progress_fields_trigger ON public.users;
-          CREATE TRIGGER protect_user_progress_fields_trigger
-          BEFORE UPDATE ON public.users
-          FOR EACH ROW EXECUTE FUNCTION public.protect_user_progress_fields();
-
-          REVOKE ALL ON FUNCTION public.protect_user_progress_fields()
-          FROM PUBLIC,anon,authenticated;
-          '''
-
-          Path('artifacts/20260620170000_014_verified_activity_and_challenge_scoring.sql').write_text(additive, encoding='utf-8')
-          Path('artifacts/20260620174500_016_lock_verified_activity_writes.sql').write_text(lock_sql, encoding='utf-8')
-          PY
 
       - name: Prepare disposable PostgreSQL schema
         run: |
@@ -210,33 +135,41 @@ jobs:
         run: |
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620010000_012_atomic_running_program_completion.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620150000_013_challenges_backend_foundation.sql
-          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f artifacts/20260620170000_014_verified_activity_and_challenge_scoring.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620170000_014_verified_activity_and_challenge_scoring.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620173000_015_once_goal_completion_hardening.sql
 
-      - name: Verify legacy writes remain available before deploy
+      - name: Verify old production client remains functional before deploy
         run: |
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
-          SELECT has_table_privilege('authenticated','public.goal_logs','INSERT');
-          SELECT has_table_privilege('authenticated','public.user_programs','UPDATE');
+          DO $$
+          BEGIN
+            IF NOT has_table_privilege('authenticated','public.goal_logs','INSERT') THEN
+              RAISE EXCEPTION 'goal_logs INSERT was locked before production deploy';
+            END IF;
+            IF NOT has_table_privilege('authenticated','public.user_programs','UPDATE') THEN
+              RAISE EXCEPTION 'user_programs UPDATE was locked before production deploy';
+            END IF;
+          END $$;
           SQL
 
       - name: Apply post-deploy write lock
-        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f artifacts/20260620174500_016_lock_verified_activity_writes.sql
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620174500_016_lock_verified_activity_writes.sql
 
       - name: Run SQL scoring and hardening tests
         run: |
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/verified_activity_and_scoring.sql
           psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/once_goal_completion_hardening.sql
 
-      - name: Verify split shape
+      - name: Verify final write lock
         run: |
-          ! grep -q 'REVOKE INSERT,UPDATE,DELETE ON public.goal_logs' artifacts/20260620170000_014_verified_activity_and_challenge_scoring.sql
-          grep -q 'REVOKE INSERT,UPDATE,DELETE ON public.goal_logs' artifacts/20260620174500_016_lock_verified_activity_writes.sql
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: zero-downtime-activity-migrations
-          path: |
-            artifacts/20260620170000_014_verified_activity_and_challenge_scoring.sql
-            artifacts/20260620174500_016_lock_verified_activity_writes.sql
-          if-no-files-found: error
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF has_table_privilege('authenticated','public.goal_logs','INSERT') THEN
+              RAISE EXCEPTION 'goal_logs INSERT is still available after migration 016';
+            END IF;
+            IF has_table_privilege('authenticated','public.user_programs','UPDATE') THEN
+              RAISE EXCEPTION 'user_programs UPDATE is still available after migration 016';
+            END IF;
+          END $$;
+          SQL
