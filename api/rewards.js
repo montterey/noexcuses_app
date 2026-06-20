@@ -174,6 +174,32 @@ async function completeProgramDay(
   return data;
 }
 
+export async function completeProgramDayWithAchievements(
+  supabase,
+  userId,
+  programCode,
+  programId,
+  expectedDay
+) {
+  const result = await completeProgramDay(
+    supabase,
+    userId,
+    programCode,
+    programId,
+    expectedDay
+  );
+
+  let achievementRewards = 0;
+
+  try {
+    achievementRewards = await checkAchievementsAndProcessRewards(supabase, userId);
+  } catch (error) {
+    console.error('Achievement processing failed after program completion:', error);
+  }
+
+  return { result, achievementRewards };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
@@ -216,14 +242,13 @@ export default async function handler(req, res) {
     }
 
     if (action === 'completeProgramDay') {
-      const result = await completeProgramDay(
+      const { result, achievementRewards } = await completeProgramDayWithAchievements(
         supabase,
         userId,
         programCode,
         programId,
         expectedDay
       );
-      const achievementRewards = await checkAchievementsAndProcessRewards(supabase, userId);
       return json(res, 200, { success: true, result, achievementRewards });
     }
 
