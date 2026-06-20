@@ -1,0 +1,164 @@
+name: Validate challenges foundation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'api/challenges.js'
+      - 'src/types/index.ts'
+      - 'supabase/migrations/20260620150000_013_challenges_backend_foundation.sql'
+      - 'supabase/migrations/20260620151000_014_challenges_lifecycle_hardening.sql'
+      - 'supabase/tests/challenges_backend_foundation.sql'
+      - 'tests/challenges-api.test.js'
+      - '.github/workflows/validate-challenges.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run Node tests
+        run: npm test
+
+      - name: Check API syntax
+        run: node --check api/challenges.js
+
+      - name: Build consolidated migration
+        run: |
+          mkdir -p artifacts
+          python3 - <<'PY'
+          from pathlib import Path
+
+          base_path = Path('supabase/migrations/20260620150000_013_challenges_backend_foundation.sql')
+          hardening_path = Path('supabase/migrations/20260620151000_014_challenges_lifecycle_hardening.sql')
+          base = base_path.read_text(encoding='utf-8')
+          hardening = hardening_path.read_text(encoding='utf-8')
+
+          def between(text: str, start: str, end: str) -> str:
+              start_index = text.index(start)
+              end_index = text.index(end, start_index)
+              return text[start_index:end_index].rstrip() + '\n\n'
+
+          engagement = between(
+              hardening,
+              'CREATE OR REPLACE FUNCTION public.challenge_engagement_count',
+              'CREATE OR REPLACE FUNCTION public.join_challenge',
+          )
+          hardened_join_and_response = between(
+              hardening,
+              'CREATE OR REPLACE FUNCTION public.join_challenge',
+              'CREATE OR REPLACE FUNCTION public.refresh_challenge_lifecycle',
+          )
+          lifecycle = between(
+              hardening,
+              'CREATE OR REPLACE FUNCTION public.refresh_challenge_lifecycle',
+              'REVOKE ALL ON FUNCTION public.challenge_engagement_count',
+          )
+
+          old_start = base.index('CREATE OR REPLACE FUNCTION public.join_challenge')
+          old_end = base.index('CREATE OR REPLACE FUNCTION public.cancel_challenge', old_start)
+          base = base[:old_start] + hardened_join_and_response + base[old_end:]
+
+          activate_marker = 'CREATE OR REPLACE FUNCTION public.activate_challenge_if_ready'
+          base = base.replace(activate_marker, engagement + activate_marker, 1)
+
+          catalog_marker = 'CREATE OR REPLACE FUNCTION public.list_public_challenges'
+          base = base.replace(catalog_marker, lifecycle + catalog_marker, 1)
+
+          assert_revoke = 'REVOKE ALL ON FUNCTION public.assert_challenge_service_role() FROM PUBLIC,anon,authenticated;'
+          base = base.replace(
+              assert_revoke,
+              assert_revoke + '\nREVOKE ALL ON FUNCTION public.challenge_engagement_count(uuid) FROM PUBLIC,anon,authenticated;',
+              1,
+          )
+
+          cancel_grant = 'GRANT EXECUTE ON FUNCTION public.cancel_challenge(uuid,uuid) TO service_role;'
+          base = base.replace(
+              cancel_grant,
+              cancel_grant + '\nGRANT EXECUTE ON FUNCTION public.refresh_challenge_lifecycle() TO service_role;',
+              1,
+          )
+
+          output = Path('artifacts/20260620150000_013_challenges_backend_foundation.sql')
+          output.write_text(base, encoding='utf-8')
+          PY
+
+      - name: Prepare disposable PostgreSQL schema
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          CREATE SCHEMA IF NOT EXISTS auth;
+          CREATE OR REPLACE FUNCTION auth.role()
+          RETURNS text
+          LANGUAGE sql
+          STABLE
+          AS $$ SELECT current_setting('request.jwt.claim.role', true) $$;
+          CREATE OR REPLACE FUNCTION auth.uid()
+          RETURNS uuid
+          LANGUAGE sql
+          STABLE
+          AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          CREATE TABLE IF NOT EXISTS public.users (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            telegram_id bigint UNIQUE,
+            username text,
+            first_name text NOT NULL DEFAULT ''
+          );
+          SQL
+
+      - name: Apply consolidated migration
+        run: >-
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1
+          -f artifacts/20260620150000_013_challenges_backend_foundation.sql
+
+      - name: Run SQL lifecycle and RLS tests
+        run: >-
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1
+          -f supabase/tests/challenges_backend_foundation.sql
+
+      - name: Verify consolidated shape
+        run: |
+          FILE=artifacts/20260620150000_013_challenges_backend_foundation.sql
+          test "$(grep -c 'CREATE OR REPLACE FUNCTION public.join_challenge' "$FILE")" -eq 1
+          test "$(grep -c 'CREATE OR REPLACE FUNCTION public.respond_challenge_participation' "$FILE")" -eq 1
+          grep -q 'CREATE OR REPLACE FUNCTION public.challenge_engagement_count' "$FILE"
+          grep -q 'CREATE OR REPLACE FUNCTION public.refresh_challenge_lifecycle' "$FILE"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: consolidated-challenges-migration
+          path: artifacts/20260620150000_013_challenges_backend_foundation.sql
+          if-no-files-found: error
