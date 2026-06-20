@@ -14,8 +14,22 @@ test('fitness days 5-30 use circuit ordering', () => {
   );
   assert.match(
     source,
-    /buildWorkoutQueue\(dayContent\.exercises, shouldInterleaveFitnessSets\)/
+    /buildWorkoutQueue\(dayContent\.exercises, shouldInterleaveSets\)/
   );
+});
+
+test('running repeated intervals also use circuit ordering', () => {
+  assert.match(source, /\|\| programCode === 'running'/);
+});
+
+test('sleep and reading keep single-task sequential behavior', () => {
+  const selectorStart = source.indexOf('const shouldInterleaveSets =');
+  const selectorEnd = source.indexOf('const queue = dayContent', selectorStart);
+  const selector = source.slice(selectorStart, selectorEnd);
+
+  assert.doesNotMatch(selector, /programCode === 'sleep'/);
+  assert.doesNotMatch(selector, /programCode === 'reading'/);
+  assert.match(source, /exercise\.type === 'task'[\s\S]*?\? 1/);
 });
 
 test('circuit queue alternates exercises before moving to the next set', () => {
@@ -32,6 +46,6 @@ test('circuit queue alternates exercises before moving to the next set', () => {
   assert.ok(outerSetLoop < innerExerciseLoop);
 });
 
-test('days 1-4 keep the existing sequential order', () => {
+test('fitness days 1-4 keep the existing sequential order', () => {
   assert.match(source, /if \(!interleaveSets\)/);
 });

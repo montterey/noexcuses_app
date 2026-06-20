@@ -255,9 +255,11 @@ export function ProgramDetail({
   const exerciseInfoRequestId = useRef(0);
 
   const programDay = dayContent?.day_number || currentDay;
-  const shouldInterleaveFitnessSets = programCode === 'fitness' && programDay >= 5;
+  const shouldInterleaveSets =
+    (programCode === 'fitness' && programDay >= 5)
+    || programCode === 'running';
   const queue = dayContent
-    ? buildWorkoutQueue(dayContent.exercises, shouldInterleaveFitnessSets)
+    ? buildWorkoutQueue(dayContent.exercises, shouldInterleaveSets)
     : [];
   const currentExercise = queue[currentIndex];
   const nextExercise = queue[currentIndex + 1];
