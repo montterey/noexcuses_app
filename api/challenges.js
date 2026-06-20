@@ -16,12 +16,11 @@ const REPORT_REASONS = new Set(['spam', 'abuse', 'misleading', 'unsafe', 'other'
 function json(res, statusCode, payload) { res.status(statusCode).json(payload); }
 function getEnv(name, fallbackName) { return process.env[name] || (fallbackName ? process.env[fallbackName] : undefined); }
 function getBody(req) { if (!req.body) return {}; return typeof req.body === 'string' ? JSON.parse(req.body) : req.body; }
-
 function timingSafeHexEqual(left, right) {
   if (typeof left !== 'string' || typeof right !== 'string') return false;
-  const leftBuffer = Buffer.from(left, 'hex');
-  const rightBuffer = Buffer.from(right, 'hex');
-  return leftBuffer.length > 0 && leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+  const a = Buffer.from(left, 'hex');
+  const b = Buffer.from(right, 'hex');
+  return a.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 export function verifyTelegramInitData(initData, botToken) {
@@ -139,15 +138,14 @@ export default async function handler(req, res) {
     const telegramUser = verifyTelegramInitData(body.initData, botToken);
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const userId = await resolveUserId(supabase, telegramUser);
-
     if (body.action === 'listPublic') {
       const filters = validateCatalogFilters(body.filters);
       const challenges = await callRpc(supabase, 'list_public_challenges', { p_category: filters.category, p_search: filters.search, p_duration_days: filters.durationDays, p_sort: filters.sort, p_page: filters.page, p_page_size: filters.pageSize });
       return json(res, 200, { success: true, challenges });
     }
     if (body.action === 'create') {
-      const challenge = validateCreateChallengeInput(body.challenge);
-      const result = await callRpc(supabase, 'create_challenge', { p_created_by: userId, p_title: challenge.title, p_description: challenge.description, p_category: challenge.category, p_visibility: challenge.visibility, p_join_mode: challenge.joinMode, p_metric_type: challenge.metricType, p_mode: challenge.mode, p_target_value: challenge.targetValue, p_duration_days: challenge.durationDays, p_starts_at: challenge.startsAt, p_registration_ends_at: challenge.registrationEndsAt, p_invited_user_id: challenge.invitedUserId });
+      const c = validateCreateChallengeInput(body.challenge);
+      const result = await callRpc(supabase, 'create_challenge', { p_created_by: userId, p_title: c.title, p_description: c.description, p_category: c.category, p_visibility: c.visibility, p_join_mode: c.joinMode, p_metric_type: c.metricType, p_mode: c.mode, p_target_value: c.targetValue, p_duration_days: c.durationDays, p_starts_at: c.startsAt, p_registration_ends_at: c.registrationEndsAt, p_invited_user_id: c.invitedUserId });
       return json(res, 200, { success: true, result });
     }
     if (body.action === 'join') {
