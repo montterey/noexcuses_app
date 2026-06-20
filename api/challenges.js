@@ -18,9 +18,9 @@ function getEnv(name, fallbackName) { return process.env[name] || (fallbackName 
 function getBody(req) { if (!req.body) return {}; return typeof req.body === 'string' ? JSON.parse(req.body) : req.body; }
 function timingSafeHexEqual(left, right) {
   if (typeof left !== 'string' || typeof right !== 'string') return false;
-  const a = Buffer.from(left, 'hex');
-  const b = Buffer.from(right, 'hex');
-  return a.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b);
+  const leftBuffer = Buffer.from(left, 'hex');
+  const rightBuffer = Buffer.from(right, 'hex');
+  return leftBuffer.length > 0 && leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 export function verifyTelegramInitData(initData, botToken) {
@@ -30,7 +30,10 @@ export function verifyTelegramInitData(initData, botToken) {
   const hash = params.get('hash');
   if (!hash) throw new Error('Telegram initData hash is missing');
   params.delete('hash');
-  const dataCheckString = Array.from(params.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join('\n');
+  const dataCheckString = Array.from(params.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
   const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
   const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
   if (!timingSafeHexEqual(calculatedHash, hash)) throw new Error('Telegram initData hash is invalid');
@@ -108,11 +111,20 @@ function validateCatalogFilters(value) {
 }
 
 async function resolveUserId(supabase, telegramUser) {
-  const { data, error } = await supabase.rpc('get_or_create_user', { p_telegram_id: telegramUser.id, p_username: telegramUser.username || null, p_first_name: telegramUser.first_name || 'Telegram' });
+  const { data, error } = await supabase.rpc('get_or_create_user', {
+    p_telegram_id: telegramUser.id,
+    p_username: telegramUser.username || null,
+    p_first_name: telegramUser.first_name || 'Telegram',
+  });
   if (error) throw error;
   return data;
 }
-async function callRpc(supabase, name, args) { const { data, error } = await supabase.rpc(name, args); if (error) throw error; return data; }
+
+async function callRpc(supabase, name, args) {
+  const { data, error } = await supabase.rpc(name, args);
+  if (error) throw error;
+  return data;
+}
 
 export function classifyChallengeError(error) {
   const code = error && typeof error === 'object' && 'code' in error ? String(error.code || '') : '';
@@ -138,28 +150,64 @@ export default async function handler(req, res) {
     const telegramUser = verifyTelegramInitData(body.initData, botToken);
     const supabase = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const userId = await resolveUserId(supabase, telegramUser);
+
     if (body.action === 'listPublic') {
       const filters = validateCatalogFilters(body.filters);
-      const challenges = await callRpc(supabase, 'list_public_challenges', { p_category: filters.category, p_search: filters.search, p_duration_days: filters.durationDays, p_sort: filters.sort, p_page: filters.page, p_page_size: filters.pageSize });
+      const challenges = await callRpc(supabase, 'list_public_challenges', {
+        p_category: filters.category,
+        p_search: filters.search,
+        p_duration_days: filters.durationDays,
+        p_sort: filters.sort,
+        p_page: filters.page,
+        p_page_size: filters.pageSize,
+      });
       return json(res, 200, { success: true, challenges });
     }
     if (body.action === 'create') {
-      const c = validateCreateChallengeInput(body.challenge);
-      const result = await callRpc(supabase, 'create_challenge', { p_created_by: userId, p_title: c.title, p_description: c.description, p_category: c.category, p_visibility: c.visibility, p_join_mode: c.joinMode, p_metric_type: c.metricType, p_mode: c.mode, p_target_value: c.targetValue, p_duration_days: c.durationDays, p_starts_at: c.startsAt, p_registration_ends_at: c.registrationEndsAt, p_invited_user_id: c.invitedUserId });
+      const challenge = validateCreateChallengeInput(body.challenge);
+      const result = await callRpc(supabase, 'create_challenge', {
+        p_created_by: userId,
+        p_title: challenge.title,
+        p_description: challenge.description,
+        p_category: challenge.category,
+        p_visibility: challenge.visibility,
+        p_join_mode: challenge.joinMode,
+        p_metric_type: challenge.metricType,
+        p_mode: challenge.mode,
+        p_target_value: challenge.targetValue,
+        p_duration_days: challenge.durationDays,
+        p_starts_at: challenge.startsAt,
+        p_registration_ends_at: challenge.registrationEndsAt,
+        p_invited_user_id: challenge.invitedUserId,
+      });
       return json(res, 200, { success: true, result });
     }
     if (body.action === 'join') {
-      const result = await callRpc(supabase, 'join_challenge', { p_user_id: userId, p_challenge_id: requireUuid(body.challengeId, 'challengeId'), p_invite_token: optionalUuid(body.inviteToken, 'inviteToken') });
+      const result = await callRpc(supabase, 'join_challenge', {
+        p_user_id: userId,
+        p_challenge_id: requireUuid(body.challengeId, 'challengeId'),
+        p_invite_token: optionalUuid(body.inviteToken, 'inviteToken'),
+      });
       return json(res, 200, { success: true, result });
     }
     if (body.action === 'respond') {
       const responseAction = requireEnum(body.responseAction, RESPONSE_ACTIONS, 'responseAction');
-      const targetUserId = responseAction === 'accept_invite' || responseAction === 'decline_invite' ? userId : requireUuid(body.targetUserId, 'targetUserId');
-      const result = await callRpc(supabase, 'respond_challenge_participation', { p_actor_user_id: userId, p_challenge_id: requireUuid(body.challengeId, 'challengeId'), p_target_user_id: targetUserId, p_action: responseAction });
+      const targetUserId = responseAction === 'accept_invite' || responseAction === 'decline_invite'
+        ? userId
+        : requireUuid(body.targetUserId, 'targetUserId');
+      const result = await callRpc(supabase, 'respond_challenge_participation', {
+        p_actor_user_id: userId,
+        p_challenge_id: requireUuid(body.challengeId, 'challengeId'),
+        p_target_user_id: targetUserId,
+        p_action: responseAction,
+      });
       return json(res, 200, { success: true, result });
     }
     if (body.action === 'cancel') {
-      const cancelled = await callRpc(supabase, 'cancel_challenge', { p_user_id: userId, p_challenge_id: requireUuid(body.challengeId, 'challengeId') });
+      const cancelled = await callRpc(supabase, 'cancel_challenge', {
+        p_user_id: userId,
+        p_challenge_id: requireUuid(body.challengeId, 'challengeId'),
+      });
       return json(res, 200, { success: true, cancelled: Boolean(cancelled) });
     }
     if (body.action === 'listMine') {
@@ -168,7 +216,12 @@ export default async function handler(req, res) {
       return json(res, 200, { success: true, challenges });
     }
     if (body.action === 'report') {
-      const reported = await callRpc(supabase, 'report_challenge', { p_reporter_user_id: userId, p_challenge_id: requireUuid(body.challengeId, 'challengeId'), p_reason: requireEnum(body.reason, REPORT_REASONS, 'reason'), p_details: optionalString(body.details, 'details', 1000) });
+      const reported = await callRpc(supabase, 'report_challenge', {
+        p_reporter_user_id: userId,
+        p_challenge_id: requireUuid(body.challengeId, 'challengeId'),
+        p_reason: requireEnum(body.reason, REPORT_REASONS, 'reason'),
+        p_details: optionalString(body.details, 'details', 1000),
+      });
       return json(res, 200, { success: true, reported: Boolean(reported) });
     }
     return json(res, 400, { success: false, error: 'Unknown action' });
