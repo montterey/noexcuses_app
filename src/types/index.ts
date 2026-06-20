@@ -103,3 +103,98 @@ export interface WeeklyStats {
   xpEarned: number;
   isToday: boolean;
 }
+
+export type ChallengeCategory =
+  | 'fitness'
+  | 'running'
+  | 'sleep'
+  | 'reading'
+  | 'goals'
+  | 'programs';
+
+export type ChallengeVisibility = 'public' | 'link_only' | 'private';
+export type ChallengeJoinMode = 'instant' | 'approval' | 'invite_only';
+export type ChallengeFormat = 'duel' | 'group' | 'cooperative';
+export type ChallengeMetric = 'goals_completed' | 'program_days_completed';
+export type ChallengeMode = 'highest_score' | 'first_to_target';
+export type ChallengeStatus = 'open' | 'full' | 'active' | 'completed' | 'cancelled' | 'expired';
+export type ChallengeParticipantStatus =
+  | 'invited'
+  | 'pending'
+  | 'approved'
+  | 'active'
+  | 'rejected'
+  | 'declined'
+  | 'left'
+  | 'completed';
+export type ChallengeResult = 'pending' | 'winner' | 'loser' | 'draw';
+export type ChallengeSort = 'newest' | 'popular' | 'starting_soon' | 'recommended';
+export type ChallengeScope = 'invitations' | 'active' | 'history' | 'all';
+
+export interface ChallengeCatalogItem {
+  id: string;
+  title: string;
+  description: string | null;
+  category: ChallengeCategory;
+  challengeFormat: ChallengeFormat;
+  metricType: ChallengeMetric;
+  mode: ChallengeMode;
+  targetValue: number | null;
+  durationDays: 1 | 3 | 7;
+  maxParticipants: number;
+  participantCount: number;
+  availablePlaces: number;
+  startsAt: string | null;
+  registrationEndsAt: string | null;
+  creatorUsername: string | null;
+  creatorFirstName: string;
+  createdAt: string;
+}
+
+export interface ChallengeParticipant {
+  challengeId: string;
+  userId: string;
+  role: 'creator' | 'opponent' | 'member';
+  status: ChallengeParticipantStatus;
+  progress: number;
+  rank: number | null;
+  result: ChallengeResult;
+  joinedAt: string | null;
+}
+
+export interface CreateChallengeInput {
+  title: string;
+  description?: string;
+  category: ChallengeCategory;
+  visibility: ChallengeVisibility;
+  joinMode: ChallengeJoinMode;
+  metricType: ChallengeMetric;
+  mode: ChallengeMode;
+  targetValue?: number;
+  durationDays: 1 | 3 | 7;
+  startsAt?: string;
+  registrationEndsAt?: string;
+  invitedUserId?: string;
+}
+
+export interface ChallengeActionResult {
+  challengeId: string;
+  challengeStatus: ChallengeStatus;
+  participantStatus?: ChallengeParticipantStatus;
+  inviteToken?: string;
+}
+
+export interface UserChallengeListItem {
+  challengeId: string;
+  title: string;
+  category: ChallengeCategory;
+  metricType: ChallengeMetric;
+  mode: ChallengeMode;
+  challengeStatus: ChallengeStatus;
+  participantStatus: ChallengeParticipantStatus;
+  progress: number;
+  result: ChallengeResult;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+}
