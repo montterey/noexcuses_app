@@ -13,9 +13,7 @@ import { useGoals } from './hooks/useGoals';
 import { usePrograms } from './hooks/usePrograms';
 import { useAchievements } from './hooks/useAchievements';
 import { useStats } from './hooks/useStats';
-import { GoalFrequency } from './types';
-
-type ProgramCode = 'fitness' | 'running' | 'sleep' | 'reading';
+import { GoalFrequency, ProgramCode } from './types';
 
 function AppContent() {
   const { user, loading: userLoading, error, refreshUser } = useUser();
@@ -58,7 +56,13 @@ function AppContent() {
   };
 
   const handleStartNewProgram = async (code: ProgramCode) => {
-    await startNewProgram(code as Parameters<typeof startNewProgram>[0]);
+    const result = await startNewProgram(code);
+
+    if (result.success) {
+      await refreshAfterGoalAction();
+    }
+
+    return result;
   };
 
   const handleAddGoal = async (newGoal: {
@@ -71,7 +75,13 @@ function AppContent() {
   };
 
   const handleStartProgram = async (programId: string) => {
-    await startOrContinueProgram(programId);
+    const result = await startOrContinueProgram(programId);
+
+    if (result.success) {
+      await refreshAfterGoalAction();
+    }
+
+    return result;
   };
 
   if (userLoading) {
