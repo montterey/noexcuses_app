@@ -2,6 +2,8 @@ export type GoalFrequency = 'daily' | 'once';
 export type GoalType = 'daily' | 'once';
 export type GoalLogStatus = 'done' | 'skipped' | 'frozen';
 export type GoalDisplayStatus = GoalLogStatus | 'overdue';
+export type ProgramCode = 'fitness' | 'running' | 'sleep' | 'reading';
+export type ProgramDayType = 'workout' | 'cardio' | 'rest' | 'stretch';
 
 export interface User {
   id: string;
@@ -44,12 +46,41 @@ export interface Goal {
 
 export interface Program {
   id: string;
+  code: ProgramCode;
   title: string;
   description: string;
   icon: string;
   totalDays: number;
   currentDay: number;
   isActive: boolean;
+  completed: boolean;
+}
+
+export interface ProgramExercise {
+  name: string;
+  sets?: number;
+  reps: string | number;
+  type?: 'exercise' | 'task';
+  youtube_id?: string | null;
+  description?: string | null;
+  tips?: string | null;
+  muscles?: string | null;
+}
+
+export interface ProgramDayContent {
+  day_number: number;
+  title: string;
+  type: ProgramDayType;
+  exercises: ProgramExercise[];
+}
+
+export interface ProgramCompletionResult {
+  success: boolean;
+  applied?: boolean;
+  currentDay?: number;
+  completed?: boolean;
+  xpAwarded?: number;
+  error?: string;
 }
 
 export interface Achievement {

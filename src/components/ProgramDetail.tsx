@@ -1,13 +1,7 @@
 import { X, Play } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
-
-interface Exercise {
-  name: string;
-  sets?: number;
-  reps: string | number;
-  type?: 'exercise' | 'task';
-}
+import { ProgramCode, ProgramDayContent, ProgramExercise } from '../types';
 
 interface ExerciseInfo {
   name?: string;
@@ -17,24 +11,23 @@ interface ExerciseInfo {
   muscles?: string | null;
 }
 
-type WorkoutQueueItem = Exercise & {
+type WorkoutQueueItem = ProgramExercise & {
   setNumber: number;
   totalSets: number;
 };
 
-interface DayContent {
-  day_number: number;
-  title: string;
-  type: 'workout' | 'cardio' | 'rest' | 'stretch';
-  exercises: Exercise[];
-}
-
 interface ProgramDetailProps {
+  programCode: ProgramCode;
   programTitle: string;
   currentDay: number;
-  dayContent: DayContent | null;
+  dayContent: ProgramDayContent | null;
+  contentLoading: boolean;
+  contentError: string | null;
+  completionError: string | null;
+  completionAlreadySaved: boolean;
+  isCompleting: boolean;
   onClose: () => void;
-  onCompleteDay: () => void;
+  onCompleteDay: () => Promise<void>;
 }
 
 type WorkoutMode = 'overview' | 'exercise' | 'rest' | 'complete';
@@ -152,7 +145,7 @@ function ExerciseTimer({ seconds }: { seconds: number }) {
   );
 }
 
-function buildWorkoutQueue(exercises: Exercise[]): WorkoutQueueItem[] {
+function buildWorkoutQueue(exercises: ProgramExercise[]): WorkoutQueueItem[] {
   const queue: WorkoutQueueItem[] = [];
 
   for (const exercise of exercises) {
@@ -176,6 +169,26 @@ function buildWorkoutQueue(exercises: Exercise[]): WorkoutQueueItem[] {
   return queue;
 }
 
+function normalizeExerciseName(name: string) {
+  return name.trim().toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ');
+}
+
+function getEmbeddedExerciseInfo(exercise?: ProgramExercise): ExerciseInfo | null {
+  if (!exercise) return null;
+
+  const info: ExerciseInfo = {
+    name: exercise.name,
+    youtube_id: exercise.youtube_id,
+    description: exercise.description,
+    tips: exercise.tips,
+    muscles: exercise.muscles,
+  };
+
+  return Object.values(info).some((value) => value != null && value !== '')
+    ? info
+    : null;
+}
+
 function getSecondsFromReps(reps: string | number): number | null {
   if (typeof reps !== 'string') return null;
 
@@ -190,9 +203,15 @@ function getSecondsFromReps(reps: string | number): number | null {
 }
 
 export function ProgramDetail({
+  programCode,
   programTitle,
   currentDay,
   dayContent,
+  contentLoading,
+  contentError,
+  completionError,
+  completionAlreadySaved,
+  isCompleting,
   onClose,
   onCompleteDay,
 }: ProgramDetailProps) {
@@ -201,25 +220,84 @@ export function ProgramDetail({
   const [exerciseInfo, setExerciseInfo] = useState<ExerciseInfo | null>(null);
   const [restTimer, setRestTimer] = useState(60);
   const [restInterval, setRestInterval] = useState<ReturnType<typeof setInterval> | null>(null);
+  const exerciseInfoRequestId = useRef(0);
 
   const queue = dayContent ? buildWorkoutQueue(dayContent.exercises) : [];
   const currentExercise = queue[currentIndex];
   const nextExercise = queue[currentIndex + 1];
   const progress = queue.length > 0 ? (currentIndex / queue.length) * 100 : 0;
 
-  const loadExerciseInfo = async (name?: string) => {
-    if (!name) {
+  const loadExerciseInfo = async (exercise?: ProgramExercise) => {
+    const name = exercise?.name;
+    const requestId = exerciseInfoRequestId.current + 1;
+    exerciseInfoRequestId.current = requestId;
+
+    if (!name || !exercise) {
       setExerciseInfo(null);
       return;
     }
 
-    const { data } = await supabase
-      .from('exercises')
-      .select('*')
-      .eq('name', name)
-      .single();
+    if (programCode !== 'running') {
+      const { data } = await supabase
+        .from('exercises')
+        .select('*')
+        .eq('name', name)
+        .single();
 
-    setExerciseInfo(data || null);
+      if (requestId === exerciseInfoRequestId.current) {
+        setExerciseInfo(data || null);
+      }
+      return;
+    }
+
+    const embeddedInfo = getEmbeddedExerciseInfo(exercise);
+    setExerciseInfo(embeddedInfo);
+
+    try {
+      const fields = 'name, youtube_id, description, tips, muscles';
+      const { data: exactMatch, error: exactError } = await supabase
+        .from('exercises')
+        .select(fields)
+        .eq('name', name)
+        .maybeSingle();
+
+      if (exactError) throw exactError;
+
+      if (exactMatch) {
+        if (requestId === exerciseInfoRequestId.current) {
+          setExerciseInfo({ ...(embeddedInfo || {}), ...exactMatch });
+        }
+        return;
+      }
+
+      const normalizedName = normalizeExerciseName(name);
+      const fallbackPattern = name.trim().replace(/\s+/g, '%');
+      const { data: candidates, error: fallbackError } = await supabase
+        .from('exercises')
+        .select(fields)
+        .ilike('name', fallbackPattern)
+        .limit(20);
+
+      if (fallbackError) throw fallbackError;
+
+      const normalizedMatches = (candidates || []).filter(
+        (candidate) => normalizeExerciseName(candidate.name || '') === normalizedName
+      );
+
+      if (requestId === exerciseInfoRequestId.current) {
+        setExerciseInfo(
+          normalizedMatches.length === 1
+            ? { ...(embeddedInfo || {}), ...normalizedMatches[0] }
+            : embeddedInfo
+        );
+      }
+    } catch (error) {
+      console.error('Error loading exercise info:', error);
+
+      if (requestId === exerciseInfoRequestId.current) {
+        setExerciseInfo(embeddedInfo);
+      }
+    }
   };
 
   const startWorkout = async () => {
@@ -230,7 +308,7 @@ export function ProgramDetail({
 
     setCurrentIndex(0);
     setMode('exercise');
-    await loadExerciseInfo(queue[0]?.name);
+    await loadExerciseInfo(queue[0]);
   };
 
   const goToNext = async () => {
@@ -245,7 +323,7 @@ export function ProgramDetail({
 
     setCurrentIndex(next);
     setMode('exercise');
-    await loadExerciseInfo(queue[next]?.name);
+    await loadExerciseInfo(queue[next]);
   };
 
   const completeExercise = () => {
@@ -256,7 +334,7 @@ export function ProgramDetail({
 
     const isTask = currentExercise?.type === 'task';
 
-    if (isTask) {
+    if (isTask || programCode === 'running') {
       void goToNext();
       return;
     }
@@ -284,7 +362,32 @@ export function ProgramDetail({
     void goToNext();
   };
 
-  if (!dayContent) return null;
+  if (contentLoading || !dayContent) {
+    return (
+      <div className="fixed inset-0 bg-dark z-50 flex items-center justify-center p-4">
+        <div className="max-w-[430px] w-full text-center">
+          {contentLoading ? (
+            <>
+              <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-gray-400">Загрузка дня...</p>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold mb-3">
+                {contentError || 'Контент этого дня пока недоступен'}
+              </h2>
+              <button
+                onClick={onClose}
+                className="w-full py-3 bg-surface rounded-xl text-white border border-white/10"
+              >
+                Закрыть
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const config = TYPE_CONFIG[dayContent.type] || TYPE_CONFIG.workout;
   const overviewDayNumber = dayContent.day_number || currentDay;
@@ -378,10 +481,11 @@ export function ProgramDetail({
             </button>
           ) : (
             <button
-              onClick={onCompleteDay}
-              className="w-full py-4 bg-surface rounded-xl font-semibold text-gray-400 text-lg active:scale-95 transition-all border border-white/10"
+              onClick={() => void onCompleteDay()}
+              disabled={isCompleting}
+              className="w-full py-4 bg-surface rounded-xl font-semibold text-gray-400 text-lg active:scale-95 transition-all border border-white/10 disabled:opacity-50 disabled:active:scale-100"
             >
-              Отдыхаю
+              {isCompleting ? 'Сохраняем...' : 'Отдыхаю'}
             </button>
           )}
         </div>
@@ -450,6 +554,18 @@ export function ProgramDetail({
                 <p className="text-6xl mb-3">✅</p>
                 <p className="text-gray-400 text-sm">
                   Просто выполни это действие и отметь его.
+                </p>
+              </div>
+            </div>
+          ) : programCode === 'running' ? (
+            <div
+              className="rounded-2xl bg-surface border border-white/5 mb-4 flex items-center justify-center"
+              style={{ aspectRatio: '16/9' }}
+            >
+              <div className="text-center px-6">
+                <p className="text-gray-500 text-5xl mb-3">🏃</p>
+                <p className="text-gray-400 text-sm">
+                  Видео для этого интервала пока недоступно
                 </p>
               </div>
             </div>
@@ -568,18 +684,54 @@ export function ProgramDetail({
   }
 
   if (mode === 'complete') {
+    if (programCode !== 'running') {
+      return (
+        <div className="fixed inset-0 bg-dark z-50 flex items-center justify-center">
+          <div className="max-w-[430px] w-full mx-auto p-4 text-center">
+            <p className="text-8xl mb-6">🏆</p>
+
+            <h2 className="text-3xl font-bold mb-2">День завершён!</h2>
+
+            <p className="text-gray-400 mb-2">
+              День {overviewDayNumber} выполнен
+            </p>
+
+            <p className="text-accent font-semibold mb-8">+25 XP</p>
+
+            <div className="bg-surface rounded-xl p-4 border border-white/5 mb-6">
+              <p className="text-gray-400 text-sm">Выполнено заданий</p>
+              <p className="text-3xl font-bold text-accent">{queue.length}</p>
+            </div>
+
+            <button
+              onClick={() => void onCompleteDay()}
+              className="w-full py-4 bg-accent rounded-xl font-semibold text-white text-lg active:scale-95 transition-all"
+            >
+              ✅ Отметить день выполненным
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="fixed inset-0 bg-dark z-50 flex items-center justify-center">
         <div className="max-w-[430px] w-full mx-auto p-4 text-center">
-          <p className="text-8xl mb-6">🏆</p>
+          <p className="text-8xl mb-6">✓</p>
 
-          <h2 className="text-3xl font-bold mb-2">День завершён!</h2>
+          <h2 className="text-3xl font-bold mb-2">
+            {completionAlreadySaved ? 'Результат уже сохранён' : 'Тренировка закончена'}
+          </h2>
 
-          <p className="text-gray-400 mb-2">
-            День {overviewDayNumber} выполнен
+          <p className="text-gray-400 mb-6">
+            {completionAlreadySaved
+              ? 'Этот день уже был учтён. XP повторно не начислен.'
+              : 'Сохраните результат, чтобы обновить прогресс программы.'}
           </p>
 
-          <p className="text-accent font-semibold mb-8">+25 XP</p>
+          {completionError && (
+            <p className="text-red-400 text-sm mb-4">{completionError}</p>
+          )}
 
           <div className="bg-surface rounded-xl p-4 border border-white/5 mb-6">
             <p className="text-gray-400 text-sm">Выполнено заданий</p>
@@ -587,10 +739,15 @@ export function ProgramDetail({
           </div>
 
           <button
-            onClick={onCompleteDay}
-            className="w-full py-4 bg-accent rounded-xl font-semibold text-white text-lg active:scale-95 transition-all"
+            onClick={completionAlreadySaved ? onClose : () => void onCompleteDay()}
+            disabled={isCompleting}
+            className="w-full py-4 bg-accent rounded-xl font-semibold text-white text-lg active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
           >
-            ✅ Отметить день выполненным
+            {completionAlreadySaved
+              ? 'Закрыть'
+              : isCompleting
+                ? 'Сохраняем...'
+                : 'Сохранить результат'}
           </button>
         </div>
       </div>

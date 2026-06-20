@@ -144,6 +144,62 @@ async function freezeDailyGoal(supabase, userId, goalId) {
   return Boolean(data);
 }
 
+async function completeProgramDay(
+  supabase,
+  userId,
+  programCode,
+  programId,
+  expectedDay
+) {
+  if (programCode !== 'running') {
+    throw new Error('Only running uses atomic program completion');
+  }
+
+  if (!Number.isInteger(expectedDay) || expectedDay < 1 || expectedDay > 30) {
+    throw new Error('Invalid program day');
+  }
+
+  if (programId != null && typeof programId !== 'string') {
+    throw new Error('Invalid program id');
+  }
+
+  const { data, error } = await supabase.rpc('complete_program_day', {
+    p_user_id: userId,
+    p_program_code: programCode,
+    p_program_id: programId || null,
+    p_expected_day: expectedDay,
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function completeProgramDayWithAchievements(
+  supabase,
+  userId,
+  programCode,
+  programId,
+  expectedDay
+) {
+  const result = await completeProgramDay(
+    supabase,
+    userId,
+    programCode,
+    programId,
+    expectedDay
+  );
+
+  let achievementRewards = 0;
+
+  try {
+    achievementRewards = await checkAchievementsAndProcessRewards(supabase, userId);
+  } catch (error) {
+    console.error('Achievement processing failed after program completion:', error);
+  }
+
+  return { result, achievementRewards };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
@@ -160,7 +216,14 @@ export default async function handler(req, res) {
       throw new Error('Server environment is not configured');
     }
 
-    const { action, initData, goalId } = getBody(req);
+    const {
+      action,
+      initData,
+      goalId,
+      programCode,
+      programId,
+      expectedDay,
+    } = getBody(req);
     const telegramUser = verifyTelegramInitData(initData, botToken);
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
@@ -176,6 +239,17 @@ export default async function handler(req, res) {
         ? await checkAchievementsAndProcessRewards(supabase, userId)
         : 0;
       return json(res, 200, { success: true, frozen, achievementRewards });
+    }
+
+    if (action === 'completeProgramDay') {
+      const { result, achievementRewards } = await completeProgramDayWithAchievements(
+        supabase,
+        userId,
+        programCode,
+        programId,
+        expectedDay
+      );
+      return json(res, 200, { success: true, result, achievementRewards });
     }
 
     if (action === 'processStreakRewards') {

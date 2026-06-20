@@ -1,15 +1,20 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
-import { Program } from '../types';
+import {
+  Program,
+  ProgramCode,
+  ProgramCompletionResult,
+  ProgramDayContent,
+  ProgramDayType,
+  ProgramExercise,
+} from '../types';
 import { ProgramDetail } from './ProgramDetail';
 import { supabase } from '../lib/supabase';
 
-type ProgramCode = 'fitness' | 'running' | 'sleep' | 'reading';
-
 interface ProgramsProps {
   programs: Program[];
-  onStartProgram: (programId: string) => void;
-  onStartNewProgram: (code: ProgramCode) => void;
+  onStartProgram: (programId: string) => Promise<ProgramCompletionResult>;
+  onStartNewProgram: (code: ProgramCode) => Promise<ProgramCompletionResult>;
 }
 
 const ALL_PROGRAMS: Array<{
@@ -90,13 +95,49 @@ export function Programs({
     currentDay: number;
   } | null>(null);
 
-  const [dayContent, setDayContent] = useState<any>(null);
+  const [dayContent, setDayContent] = useState<ProgramDayContent | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState<string | null>(null);
+  const [completionError, setCompletionError] = useState<string | null>(null);
+  const [completionAlreadySaved, setCompletionAlreadySaved] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const contentRequestId = useRef(0);
+
+  const closeProgram = () => {
+    contentRequestId.current += 1;
+    setSelectedProgram(null);
+    setDayContent(null);
+    setContentLoading(false);
+    setContentError(null);
+    setCompletionError(null);
+    setCompletionAlreadySaved(false);
+    setIsCompleting(false);
+  };
+
+  const parseExercises = (value: unknown): ProgramExercise[] => {
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+
+    if (!Array.isArray(parsed)) {
+      throw new Error('Invalid program exercises');
+    }
+
+    return parsed.filter((item): item is ProgramExercise => (
+      typeof item === 'object'
+      && item !== null
+      && typeof (item as ProgramExercise).name === 'string'
+      && ['string', 'number'].includes(typeof (item as ProgramExercise).reps)
+    ));
+  };
 
   const openProgram = async (
     template: (typeof ALL_PROGRAMS)[number],
     userProgram?: Program
   ) => {
+    if (template.code === 'running' && userProgram?.completed) return;
+
     const currentDay = userProgram?.currentDay || 1;
+    const requestId = contentRequestId.current + 1;
+    contentRequestId.current = requestId;
 
     setSelectedProgram({
       code: template.code,
@@ -104,36 +145,78 @@ export function Programs({
       programId: userProgram?.id,
       currentDay,
     });
+    setDayContent(null);
+    setContentError(null);
+    setCompletionError(null);
+    setCompletionAlreadySaved(false);
+    setContentLoading(true);
 
-    const { data } = await supabase
-      .from('program_content')
-      .select('*')
-      .eq('program_code', template.code)
-      .eq('day_number', currentDay)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('program_content')
+        .select('day_number, title, type, exercises')
+        .eq('program_code', template.code)
+        .eq('day_number', currentDay)
+        .maybeSingle();
 
-    if (data) {
+      if (error) throw error;
+      if (!data) throw new Error('Program content not found');
+      if (requestId !== contentRequestId.current) return;
+
       setDayContent({
-        ...data,
-        exercises:
-          typeof data.exercises === 'string'
-            ? JSON.parse(data.exercises)
-            : data.exercises,
+        day_number: Number(data.day_number),
+        title: String(data.title || `День ${currentDay}`),
+        type: data.type as ProgramDayType,
+        exercises: parseExercises(data.exercises),
       });
+    } catch (error) {
+      console.error('Error loading program day content:', error);
+
+      if (requestId === contentRequestId.current) {
+        setDayContent(null);
+        setContentError('Контент этого дня пока недоступен');
+      }
+    } finally {
+      if (requestId === contentRequestId.current) {
+        setContentLoading(false);
+      }
     }
   };
 
   const handleCompleteDay = async () => {
-    if (!selectedProgram) return;
+    if (
+      !selectedProgram
+      || !dayContent
+      || contentLoading
+      || contentError
+      || isCompleting
+    ) return;
 
-    if (selectedProgram.programId) {
-      await onStartProgram(selectedProgram.programId);
-    } else {
-      await onStartNewProgram(selectedProgram.code);
+    setIsCompleting(true);
+    setCompletionError(null);
+
+    try {
+      const result = selectedProgram.programId
+        ? await onStartProgram(selectedProgram.programId)
+        : await onStartNewProgram(selectedProgram.code);
+
+      if (!result.success) {
+        setCompletionError(result.error || 'Не удалось завершить день программы');
+        return;
+      }
+
+      if (result.applied === false) {
+        setCompletionAlreadySaved(true);
+        return;
+      }
+
+      closeProgram();
+    } catch (error) {
+      console.error('Error completing program day:', error);
+      setCompletionError('Не удалось завершить день программы');
+    } finally {
+      setIsCompleting(false);
     }
-
-    setSelectedProgram(null);
-    setDayContent(null);
   };
 
   return (
@@ -149,7 +232,7 @@ export function Programs({
         <div className="space-y-4">
           {ALL_PROGRAMS.map((template) => {
             const userProgram = programs.find(
-              (program) => program.title === template.title
+              (program) => program.code === template.code
             );
 
             const progress = userProgram
@@ -157,6 +240,8 @@ export function Programs({
               : 0;
 
             const isActive = Boolean(userProgram?.isActive);
+            const isCompletedRunning = template.code === 'running'
+              && Boolean(userProgram?.completed);
             const currentDay = userProgram?.currentDay || 0;
 
             return (
@@ -250,14 +335,21 @@ export function Programs({
 
                   <button
                     onClick={() => openProgram(template, userProgram)}
+                    disabled={isCompletedRunning}
                     className={`w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 active:scale-95 ${
-                      isActive
+                      isCompletedRunning
+                        ? 'bg-surface text-green-400 border border-green-400/20 cursor-default active:scale-100'
+                        : isActive
                         ? 'bg-surface-light text-white border border-white/10'
                         : 'bg-accent text-white'
                     }`}
                   >
-                    {isActive ? `Продолжить: день ${currentDay}` : 'Начать программу'}
-                    <ChevronRight size={18} />
+                    {isCompletedRunning
+                      ? 'Программа завершена'
+                      : isActive
+                        ? `Продолжить: день ${currentDay}`
+                        : 'Начать программу'}
+                    {!isCompletedRunning && <ChevronRight size={18} />}
                   </button>
                 </div>
               </div>
@@ -268,13 +360,16 @@ export function Programs({
 
       {selectedProgram && (
         <ProgramDetail
+          programCode={selectedProgram.code}
           programTitle={selectedProgram.title}
           currentDay={selectedProgram.currentDay}
           dayContent={dayContent}
-          onClose={() => {
-            setSelectedProgram(null);
-            setDayContent(null);
-          }}
+          contentLoading={contentLoading}
+          contentError={contentError}
+          completionError={completionError}
+          completionAlreadySaved={completionAlreadySaved}
+          isCompleting={isCompleting}
+          onClose={closeProgram}
           onCompleteDay={handleCompleteDay}
         />
       )}
