@@ -1,0 +1,26 @@
+name: Cleanup temporary program audit workflows
+
+on:
+  push:
+    branches:
+      - fix/fitness-circuit-order
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Remove temporary workflow files
+        run: |
+          rm -f .github/workflows/extend-program-circuit-check.yml
+          rm -f .github/workflows/cleanup-program-audit-workflows.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Remove temporary program audit workflows"
+          git push origin HEAD:fix/fitness-circuit-order
