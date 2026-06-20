@@ -2,34 +2,27 @@
 -- The live application uses user_programs, while the original repository
 -- migrations only created the legacy programs table. Keep clean installs usable
 -- without replacing or rewriting an existing live user_programs table.
-CREATE TABLE IF NOT EXISTS public.user_programs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  program_code text NOT NULL,
-  current_day integer NOT NULL DEFAULT 1,
-  active boolean NOT NULL DEFAULT true,
-  completed boolean NOT NULL DEFAULT false,
-  start_date date NOT NULL DEFAULT CURRENT_DATE,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (user_id, program_code)
-);
-
-ALTER TABLE public.user_programs ENABLE ROW LEVEL SECURITY;
-
 DO $$
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'user_programs'
-      AND policyname = 'user_programs_select_client'
-  ) THEN
-    CREATE POLICY user_programs_select_client
-      ON public.user_programs
-      FOR SELECT
-      TO anon, authenticated
-      USING (true);
+  IF to_regclass('public.user_programs') IS NULL THEN
+    CREATE TABLE public.user_programs (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+      program_code text NOT NULL,
+      current_day integer NOT NULL DEFAULT 1,
+      active boolean NOT NULL DEFAULT true,
+      completed boolean NOT NULL DEFAULT false,
+      start_date date NOT NULL DEFAULT CURRENT_DATE,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      UNIQUE (user_id, program_code)
+    );
+
+    -- The existing application manages non-running programs from the client.
+    -- Only grant these privileges when this migration creates the table; never
+    -- alter RLS or policies on an existing live user_programs table.
+    GRANT SELECT, INSERT, UPDATE, DELETE
+      ON TABLE public.user_programs
+      TO anon, authenticated;
   END IF;
 END;
 $$;
