@@ -6,11 +6,13 @@ on:
       - main
     paths:
       - 'api/rewards.js'
+      - 'api/challenges.js'
       - 'src/hooks/useGoals.ts'
       - 'src/hooks/usePrograms.ts'
       - 'supabase/migrations/20260620170000_014_verified_activity_and_challenge_scoring.sql'
       - 'supabase/tests/verified_activity_and_scoring.sql'
       - 'tests/verified-activity.test.js'
+      - 'tests/rewards-api.test.js'
       - '.github/workflows/validate-verified-activity.yml'
 
 permissions:
@@ -51,7 +53,9 @@ jobs:
 
       - name: Check API syntax
         if: success()
-        run: node --check api/rewards.js
+        run: |
+          node --check api/rewards.js
+          node --check api/challenges.js
 
       - uses: actions/upload-artifact@v4
         if: always()
