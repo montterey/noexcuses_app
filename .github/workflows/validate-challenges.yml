@@ -145,11 +145,14 @@ jobs:
           -f artifacts/20260620150000_013_challenges_backend_foundation.sql
 
       - name: Run SQL lifecycle and RLS tests
-        run: >-
-          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1
-          -f supabase/tests/challenges_backend_foundation.sql
+        run: |
+          set -o pipefail
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/tests/challenges_backend_foundation.sql \
+            2>&1 | tee artifacts/sql-test.log
 
       - name: Verify consolidated shape
+        if: success()
         run: |
           FILE=artifacts/20260620150000_013_challenges_backend_foundation.sql
           test "$(grep -c 'CREATE OR REPLACE FUNCTION public.join_challenge' "$FILE")" -eq 1
@@ -158,7 +161,10 @@ jobs:
           grep -q 'CREATE OR REPLACE FUNCTION public.refresh_challenge_lifecycle' "$FILE"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: consolidated-challenges-migration
-          path: artifacts/20260620150000_013_challenges_backend_foundation.sql
+          name: challenges-validation-output
+          path: |
+            artifacts/20260620150000_013_challenges_backend_foundation.sql
+            artifacts/sql-test.log
           if-no-files-found: error
