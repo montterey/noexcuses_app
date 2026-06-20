@@ -14,7 +14,7 @@ on:
       - '.github/workflows/validate-challenges.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
@@ -35,6 +35,9 @@ jobs:
       PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -109,6 +112,12 @@ jobs:
               1,
           )
 
+          old_activation = "UPDATE public.challenges SET status=new_status,starts_at=s,ends_at=s+make_interval(days=>v.duration_days),accepted_at=COALESCE(accepted_at,now()) WHERE id=p_challenge_id;"
+          new_activation = "UPDATE public.challenges SET status=new_status,starts_at=s,ends_at=s+make_interval(days=>v.duration_days),registration_ends_at=LEAST(COALESCE(registration_ends_at,s),s),accepted_at=COALESCE(accepted_at,now()) WHERE id=p_challenge_id;"
+          if old_activation not in base:
+              raise RuntimeError('activation update target not found')
+          base = base.replace(old_activation, new_activation, 1)
+
           output = Path('artifacts/20260620150000_013_challenges_backend_foundation.sql')
           output.write_text(base, encoding='utf-8')
           PY
@@ -152,13 +161,13 @@ jobs:
             2>&1 | tee artifacts/sql-test.log
 
       - name: Verify consolidated shape
-        if: success()
         run: |
           FILE=artifacts/20260620150000_013_challenges_backend_foundation.sql
           test "$(grep -c 'CREATE OR REPLACE FUNCTION public.join_challenge' "$FILE")" -eq 1
           test "$(grep -c 'CREATE OR REPLACE FUNCTION public.respond_challenge_participation' "$FILE")" -eq 1
           grep -q 'CREATE OR REPLACE FUNCTION public.challenge_engagement_count' "$FILE"
           grep -q 'CREATE OR REPLACE FUNCTION public.refresh_challenge_lifecycle' "$FILE"
+          grep -q 'registration_ends_at=LEAST' "$FILE"
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -168,3 +177,16 @@ jobs:
             artifacts/20260620150000_013_challenges_backend_foundation.sql
             artifacts/sql-test.log
           if-no-files-found: error
+
+      - name: Commit validated consolidated migration
+        if: success()
+        run: |
+          cp artifacts/20260620150000_013_challenges_backend_foundation.sql \
+            supabase/migrations/20260620150000_013_challenges_backend_foundation.sql
+          rm supabase/migrations/20260620151000_014_challenges_lifecycle_hardening.sql
+          rm .github/workflows/validate-challenges.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Consolidate and validate challenges migration"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
