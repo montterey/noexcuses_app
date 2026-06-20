@@ -35,13 +35,30 @@ jobs:
 
       - name: Run each Node test file
         run: |
+          mkdir -p artifacts
+          : > artifacts/node-test.log
+          failed=0
           for test_file in tests/*.test.js; do
-            echo "Running ${test_file}"
-            node --test "${test_file}"
+            echo "Running ${test_file}" | tee -a artifacts/node-test.log
+            if ! node --test "${test_file}" >> artifacts/node-test.log 2>&1; then
+              echo "FAILED_FILE=${test_file}" | tee -a artifacts/node-test.log
+              failed=1
+              break
+            fi
           done
+          cat artifacts/node-test.log
+          exit ${failed}
 
       - name: Check API syntax
+        if: success()
         run: node --check api/rewards.js
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verified-activity-node-diagnostics
+          path: artifacts/node-test.log
+          if-no-files-found: error
 
   sql-validation:
     runs-on: ubuntu-latest
