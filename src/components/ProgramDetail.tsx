@@ -684,6 +684,36 @@ export function ProgramDetail({
   }
 
   if (mode === 'complete') {
+    if (programCode !== 'running') {
+      return (
+        <div className="fixed inset-0 bg-dark z-50 flex items-center justify-center">
+          <div className="max-w-[430px] w-full mx-auto p-4 text-center">
+            <p className="text-8xl mb-6">🏆</p>
+
+            <h2 className="text-3xl font-bold mb-2">День завершён!</h2>
+
+            <p className="text-gray-400 mb-2">
+              День {overviewDayNumber} выполнен
+            </p>
+
+            <p className="text-accent font-semibold mb-8">+25 XP</p>
+
+            <div className="bg-surface rounded-xl p-4 border border-white/5 mb-6">
+              <p className="text-gray-400 text-sm">Выполнено заданий</p>
+              <p className="text-3xl font-bold text-accent">{queue.length}</p>
+            </div>
+
+            <button
+              onClick={() => void onCompleteDay()}
+              className="w-full py-4 bg-accent rounded-xl font-semibold text-white text-lg active:scale-95 transition-all"
+            >
+              ✅ Отметить день выполненным
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="fixed inset-0 bg-dark z-50 flex items-center justify-center">
         <div className="max-w-[430px] w-full mx-auto p-4 text-center">
