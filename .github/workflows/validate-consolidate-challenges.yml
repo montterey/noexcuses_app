@@ -1,0 +1,158 @@
+name: Validate and consolidate challenges migration
+
+on:
+  push:
+    branches:
+      - codex/challenges-backend-foundation
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-consolidate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run Node tests
+        run: npm test
+
+      - name: Consolidate 013 and 014
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration = Path('supabase/migrations/20260620150000_013_challenges_backend_foundation.sql')
+          hardening = Path('supabase/migrations/20260620151000_014_challenges_lifecycle_hardening.sql')
+          source = migration.read_text(encoding='utf-8')
+          extra = hardening.read_text(encoding='utf-8')
+
+          def section(text: str, start: str, end: str) -> str:
+              start_pos = text.index(start)
+              end_pos = text.index(end, start_pos)
+              return text[start_pos:end_pos].rstrip() + '\n\n'
+
+          engagement = section(
+              extra,
+              'CREATE OR REPLACE FUNCTION public.challenge_engagement_count',
+              'CREATE OR REPLACE FUNCTION public.join_challenge',
+          )
+          hardened_join_and_response = section(
+              extra,
+              'CREATE OR REPLACE FUNCTION public.join_challenge',
+              'CREATE OR REPLACE FUNCTION public.refresh_challenge_lifecycle',
+          )
+          lifecycle = section(
+              extra,
+              'CREATE OR REPLACE FUNCTION public.refresh_challenge_lifecycle',
+              'REVOKE ALL ON FUNCTION public.challenge_engagement_count',
+          )
+
+          old_start = source.index('CREATE OR REPLACE FUNCTION public.join_challenge')
+          old_end = source.index('CREATE OR REPLACE FUNCTION public.cancel_challenge', old_start)
+          source = source[:old_start] + hardened_join_and_response + source[old_end:]
+
+          activate_marker = 'CREATE OR REPLACE FUNCTION public.activate_challenge_if_ready'
+          source = source.replace(activate_marker, engagement + activate_marker, 1)
+
+          catalog_marker = 'CREATE OR REPLACE FUNCTION public.list_public_challenges'
+          source = source.replace(catalog_marker, lifecycle + catalog_marker, 1)
+
+          assert_revoke = (
+              'REVOKE ALL ON FUNCTION public.assert_challenge_service_role() '
+              'FROM PUBLIC,anon,authenticated;'
+          )
+          source = source.replace(
+              assert_revoke,
+              assert_revoke + '\nREVOKE ALL ON FUNCTION public.challenge_engagement_count(uuid) FROM PUBLIC,anon,authenticated;',
+              1,
+          )
+
+          cancel_grant = 'GRANT EXECUTE ON FUNCTION public.cancel_challenge(uuid,uuid) TO service_role;'
+          source = source.replace(
+              cancel_grant,
+              cancel_grant + '\nGRANT EXECUTE ON FUNCTION public.refresh_challenge_lifecycle() TO service_role;',
+              1,
+          )
+
+          migration.write_text(source, encoding='utf-8')
+          hardening.unlink()
+          Path('.github/trigger-challenges-validation.txt').unlink(missing_ok=True)
+          Path('.github/workflows/validate-consolidate-challenges.yml').unlink()
+          PY
+
+      - name: Prepare disposable PostgreSQL schema
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          CREATE SCHEMA IF NOT EXISTS auth;
+          CREATE OR REPLACE FUNCTION auth.role()
+          RETURNS text LANGUAGE sql STABLE
+          AS $$ SELECT current_setting('request.jwt.claim.role', true) $$;
+          CREATE OR REPLACE FUNCTION auth.uid()
+          RETURNS uuid LANGUAGE sql STABLE
+          AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          CREATE TABLE IF NOT EXISTS public.users (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            telegram_id bigint UNIQUE,
+            username text,
+            first_name text NOT NULL DEFAULT ''
+          );
+          SQL
+
+      - name: Apply consolidated migration
+        run: >-
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1
+          -f supabase/migrations/20260620150000_013_challenges_backend_foundation.sql
+
+      - name: Run SQL lifecycle and RLS tests
+        run: >-
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1
+          -f supabase/tests/challenges_backend_foundation.sql
+
+      - name: Verify final migration shape
+        run: |
+          test ! -f supabase/migrations/20260620151000_014_challenges_lifecycle_hardening.sql
+          test ! -f .github/workflows/validate-consolidate-challenges.yml
+          test "$(grep -c 'CREATE OR REPLACE FUNCTION public.join_challenge' supabase/migrations/20260620150000_013_challenges_backend_foundation.sql)" -eq 1
+          test "$(grep -c 'CREATE OR REPLACE FUNCTION public.respond_challenge_participation' supabase/migrations/20260620150000_013_challenges_backend_foundation.sql)" -eq 1
+          grep -q 'CREATE OR REPLACE FUNCTION public.refresh_challenge_lifecycle' supabase/migrations/20260620150000_013_challenges_backend_foundation.sql
+          grep -q 'CREATE OR REPLACE FUNCTION public.challenge_engagement_count' supabase/migrations/20260620150000_013_challenges_backend_foundation.sql
+
+      - name: Commit validated result
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Validate and consolidate challenges migration"
+          git push origin HEAD:codex/challenges-backend-foundation
