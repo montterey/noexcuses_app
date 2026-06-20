@@ -99,6 +99,7 @@ export function Programs({
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
   const [completionError, setCompletionError] = useState<string | null>(null);
+  const [completionAlreadySaved, setCompletionAlreadySaved] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const contentRequestId = useRef(0);
 
@@ -109,6 +110,7 @@ export function Programs({
     setContentLoading(false);
     setContentError(null);
     setCompletionError(null);
+    setCompletionAlreadySaved(false);
     setIsCompleting(false);
   };
 
@@ -131,6 +133,8 @@ export function Programs({
     template: (typeof ALL_PROGRAMS)[number],
     userProgram?: Program
   ) => {
+    if (template.code === 'running' && userProgram?.completed) return;
+
     const currentDay = userProgram?.currentDay || 1;
     const requestId = contentRequestId.current + 1;
     contentRequestId.current = requestId;
@@ -144,6 +148,7 @@ export function Programs({
     setDayContent(null);
     setContentError(null);
     setCompletionError(null);
+    setCompletionAlreadySaved(false);
     setContentLoading(true);
 
     try {
@@ -200,6 +205,11 @@ export function Programs({
         return;
       }
 
+      if (result.applied === false) {
+        setCompletionAlreadySaved(true);
+        return;
+      }
+
       closeProgram();
     } catch (error) {
       console.error('Error completing program day:', error);
@@ -230,6 +240,8 @@ export function Programs({
               : 0;
 
             const isActive = Boolean(userProgram?.isActive);
+            const isCompletedRunning = template.code === 'running'
+              && Boolean(userProgram?.completed);
             const currentDay = userProgram?.currentDay || 0;
 
             return (
@@ -323,14 +335,21 @@ export function Programs({
 
                   <button
                     onClick={() => openProgram(template, userProgram)}
+                    disabled={isCompletedRunning}
                     className={`w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 active:scale-95 ${
-                      isActive
+                      isCompletedRunning
+                        ? 'bg-surface text-green-400 border border-green-400/20 cursor-default active:scale-100'
+                        : isActive
                         ? 'bg-surface-light text-white border border-white/10'
                         : 'bg-accent text-white'
                     }`}
                   >
-                    {isActive ? `Продолжить: день ${currentDay}` : 'Начать программу'}
-                    <ChevronRight size={18} />
+                    {isCompletedRunning
+                      ? 'Программа завершена'
+                      : isActive
+                        ? `Продолжить: день ${currentDay}`
+                        : 'Начать программу'}
+                    {!isCompletedRunning && <ChevronRight size={18} />}
                   </button>
                 </div>
               </div>
@@ -348,6 +367,7 @@ export function Programs({
           contentLoading={contentLoading}
           contentError={contentError}
           completionError={completionError}
+          completionAlreadySaved={completionAlreadySaved}
           isCompleting={isCompleting}
           onClose={closeProgram}
           onCompleteDay={handleCompleteDay}
