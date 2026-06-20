@@ -145,17 +145,64 @@ function ExerciseTimer({ seconds }: { seconds: number }) {
   );
 }
 
-function buildWorkoutQueue(exercises: ProgramExercise[]): WorkoutQueueItem[] {
+function getTotalSets(exercise: ProgramExercise) {
+  return exercise.type === 'task'
+    ? 1
+    : Math.max(1, Number(exercise.sets) || 1);
+}
+
+function shouldInterleaveProgramSets(
+  programCode: ProgramCode,
+  programDay: number,
+  exercises: ProgramExercise[]
+) {
+  if (programCode === 'fitness') return programDay >= 5;
+
+  const nonTaskExercises = exercises.filter(
+    (exercise) => exercise.type !== 'task'
+  );
+
+  return nonTaskExercises.length > 1
+    && nonTaskExercises.some((exercise) => getTotalSets(exercise) > 1);
+}
+
+function buildWorkoutQueue(
+  exercises: ProgramExercise[],
+  interleaveSets = false
+): WorkoutQueueItem[] {
   const queue: WorkoutQueueItem[] = [];
 
-  for (const exercise of exercises) {
-    const isTask = exercise.type === 'task';
+  if (!interleaveSets) {
+    for (const exercise of exercises) {
+      const totalSets = getTotalSets(exercise);
 
-    const totalSets = isTask
-      ? 1
-      : Math.max(1, Number(exercise.sets) || 1);
+      for (let set = 1; set <= totalSets; set++) {
+        queue.push({
+          ...exercise,
+          type: exercise.type || 'exercise',
+          sets: totalSets,
+          setNumber: set,
+          totalSets,
+        });
+      }
+    }
 
-    for (let set = 1; set <= totalSets; set++) {
+    return queue;
+  }
+
+  const exercisesWithSets = exercises.map((exercise) => ({
+    exercise,
+    totalSets: getTotalSets(exercise),
+  }));
+  const maxSets = Math.max(
+    0,
+    ...exercisesWithSets.map(({ totalSets }) => totalSets)
+  );
+
+  for (let set = 1; set <= maxSets; set++) {
+    for (const { exercise, totalSets } of exercisesWithSets) {
+      if (set > totalSets) continue;
+
       queue.push({
         ...exercise,
         type: exercise.type || 'exercise',
@@ -222,7 +269,13 @@ export function ProgramDetail({
   const [restInterval, setRestInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const exerciseInfoRequestId = useRef(0);
 
-  const queue = dayContent ? buildWorkoutQueue(dayContent.exercises) : [];
+  const programDay = dayContent?.day_number || currentDay;
+  const shouldInterleaveSets = dayContent
+    ? shouldInterleaveProgramSets(programCode, programDay, dayContent.exercises)
+    : false;
+  const queue = dayContent
+    ? buildWorkoutQueue(dayContent.exercises, shouldInterleaveSets)
+    : [];
   const currentExercise = queue[currentIndex];
   const nextExercise = queue[currentIndex + 1];
   const progress = queue.length > 0 ? (currentIndex / queue.length) * 100 : 0;
