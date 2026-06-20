@@ -24,6 +24,7 @@ interface ProgramDetailProps {
   contentLoading: boolean;
   contentError: string | null;
   completionError: string | null;
+  completionAlreadySaved: boolean;
   isCompleting: boolean;
   onClose: () => void;
   onCompleteDay: () => Promise<void>;
@@ -209,6 +210,7 @@ export function ProgramDetail({
   contentLoading,
   contentError,
   completionError,
+  completionAlreadySaved,
   isCompleting,
   onClose,
   onCompleteDay,
@@ -232,6 +234,19 @@ export function ProgramDetail({
 
     if (!name || !exercise) {
       setExerciseInfo(null);
+      return;
+    }
+
+    if (programCode !== 'running') {
+      const { data } = await supabase
+        .from('exercises')
+        .select('*')
+        .eq('name', name)
+        .single();
+
+      if (requestId === exerciseInfoRequestId.current) {
+        setExerciseInfo(data || null);
+      }
       return;
     }
 
@@ -672,16 +687,16 @@ export function ProgramDetail({
     return (
       <div className="fixed inset-0 bg-dark z-50 flex items-center justify-center">
         <div className="max-w-[430px] w-full mx-auto p-4 text-center">
-          <p className="text-8xl mb-6">🏆</p>
+          <p className="text-8xl mb-6">✓</p>
 
-          <h2 className="text-3xl font-bold mb-2">День завершён!</h2>
+          <h2 className="text-3xl font-bold mb-2">
+            {completionAlreadySaved ? 'Результат уже сохранён' : 'Тренировка закончена'}
+          </h2>
 
-          <p className="text-gray-400 mb-2">
-            День {overviewDayNumber} выполнен
-          </p>
-
-          <p className="text-accent font-semibold mb-8">
-            +{programCode === 'running' && overviewDayNumber === 30 ? 500 : 25} XP
+          <p className="text-gray-400 mb-6">
+            {completionAlreadySaved
+              ? 'Этот день уже был учтён. XP повторно не начислен.'
+              : 'Сохраните результат, чтобы обновить прогресс программы.'}
           </p>
 
           {completionError && (
@@ -694,11 +709,15 @@ export function ProgramDetail({
           </div>
 
           <button
-            onClick={() => void onCompleteDay()}
+            onClick={completionAlreadySaved ? onClose : () => void onCompleteDay()}
             disabled={isCompleting}
             className="w-full py-4 bg-accent rounded-xl font-semibold text-white text-lg active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
           >
-            {isCompleting ? 'Сохраняем...' : '✅ Отметить день выполненным'}
+            {completionAlreadySaved
+              ? 'Закрыть'
+              : isCompleting
+                ? 'Сохраняем...'
+                : 'Сохранить результат'}
           </button>
         </div>
       </div>
