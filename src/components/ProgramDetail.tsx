@@ -151,6 +151,21 @@ function getTotalSets(exercise: ProgramExercise) {
     : Math.max(1, Number(exercise.sets) || 1);
 }
 
+function shouldInterleaveProgramSets(
+  programCode: ProgramCode,
+  programDay: number,
+  exercises: ProgramExercise[]
+) {
+  if (programCode === 'fitness') return programDay >= 5;
+
+  const nonTaskExercises = exercises.filter(
+    (exercise) => exercise.type !== 'task'
+  );
+
+  return nonTaskExercises.length > 1
+    && nonTaskExercises.some((exercise) => getTotalSets(exercise) > 1);
+}
+
 function buildWorkoutQueue(
   exercises: ProgramExercise[],
   interleaveSets = false
@@ -255,9 +270,9 @@ export function ProgramDetail({
   const exerciseInfoRequestId = useRef(0);
 
   const programDay = dayContent?.day_number || currentDay;
-  const shouldInterleaveSets =
-    (programCode === 'fitness' && programDay >= 5)
-    || programCode === 'running';
+  const shouldInterleaveSets = dayContent
+    ? shouldInterleaveProgramSets(programCode, programDay, dayContent.exercises)
+    : false;
   const queue = dayContent
     ? buildWorkoutQueue(dayContent.exercises, shouldInterleaveSets)
     : [];

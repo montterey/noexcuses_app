@@ -8,28 +8,27 @@ const source = await readFile(
 );
 
 test('fitness days 5-30 use circuit ordering', () => {
+  assert.match(source, /programCode === 'fitness'\) return programDay >= 5/);
   assert.match(
     source,
-    /programCode === 'fitness' && programDay >= 5/
-  );
-  assert.match(
-    source,
-    /buildWorkoutQueue\(dayContent\.exercises, shouldInterleaveSets\)/
+    /shouldInterleaveProgramSets\(programCode, programDay, dayContent\.exercises\)/
   );
 });
 
-test('running repeated intervals also use circuit ordering', () => {
-  assert.match(source, /\|\| programCode === 'running'/);
+test('other programs interleave only real multi-set exercise sequences', () => {
+  const helperStart = source.indexOf('function shouldInterleaveProgramSets');
+  const helperEnd = source.indexOf('function buildWorkoutQueue');
+  const helper = source.slice(helperStart, helperEnd);
+
+  assert.match(helper, /exercise\.type !== 'task'/);
+  assert.match(helper, /nonTaskExercises\.length > 1/);
+  assert.match(helper, /getTotalSets\(exercise\) > 1/);
 });
 
-test('sleep and reading keep single-task sequential behavior', () => {
-  const selectorStart = source.indexOf('const shouldInterleaveSets =');
-  const selectorEnd = source.indexOf('const queue = dayContent', selectorStart);
-  const selector = source.slice(selectorStart, selectorEnd);
-
-  assert.doesNotMatch(selector, /programCode === 'sleep'/);
-  assert.doesNotMatch(selector, /programCode === 'reading'/);
+test('sleep and reading task-only days remain sequential', () => {
   assert.match(source, /exercise\.type === 'task'[\s\S]*?\? 1/);
+  assert.doesNotMatch(source, /programCode === 'sleep'.*return true/);
+  assert.doesNotMatch(source, /programCode === 'reading'.*return true/);
 });
 
 test('circuit queue alternates exercises before moving to the next set', () => {
@@ -48,4 +47,5 @@ test('circuit queue alternates exercises before moving to the next set', () => {
 
 test('fitness days 1-4 keep the existing sequential order', () => {
   assert.match(source, /if \(!interleaveSets\)/);
+  assert.match(source, /programCode === 'fitness'\) return programDay >= 5/);
 });
