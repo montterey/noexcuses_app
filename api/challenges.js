@@ -84,8 +84,9 @@ export function verifyTelegramInitData(initData, botToken) {
   const maxAge = Number(
     process.env.TELEGRAM_INIT_DATA_MAX_AGE_SECONDS || DEFAULT_INIT_DATA_MAX_AGE_SECONDS
   );
+  const ageSeconds = Date.now() / 1000 - authDate;
 
-  if (!authDate || Date.now() / 1000 - authDate > maxAge) {
+  if (!authDate || ageSeconds < -60 || ageSeconds > maxAge) {
     throw new Error('Telegram initData is expired');
   }
 
@@ -109,12 +110,15 @@ function requireObject(value, name) {
   return value;
 }
 
-function requireString(value, name, maxLength) {
+function requireString(value, name, maxLength, minLength = 1) {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error(`${name} is required`);
   }
 
   const normalized = value.trim();
+  if (normalized.length < minLength) {
+    throw new Error(`${name} is too short`);
+  }
   if (maxLength && normalized.length > maxLength) {
     throw new Error(`${name} is too long`);
   }
@@ -183,7 +187,7 @@ export function validateCreateChallengeInput(value) {
   }
 
   return {
-    title: requireString(input.title, 'title', 120),
+    title: requireString(input.title, 'title', 120, 3),
     description: optionalString(input.description, 'description', 1000),
     category: requireEnum(input.category, CATEGORIES, 'category'),
     visibility,
@@ -202,15 +206,20 @@ function validateCatalogFilters(value) {
   const filters = value == null ? {} : requireObject(value, 'filters');
   const page = filters.page == null ? 1 : positiveInteger(filters.page, 'page');
   const pageSize = filters.pageSize == null ? 20 : positiveInteger(filters.pageSize, 'pageSize');
+  const durationDays = filters.durationDays == null
+    ? null
+    : positiveInteger(filters.durationDays, 'durationDays');
+
+  if (durationDays != null && ![1, 3, 7].includes(durationDays)) {
+    throw new Error('durationDays is invalid');
+  }
 
   return {
     category: filters.category == null || filters.category === ''
       ? null
       : requireEnum(filters.category, CATEGORIES, 'category'),
     search: optionalString(filters.search, 'search', 120),
-    durationDays: filters.durationDays == null
-      ? null
-      : positiveInteger(filters.durationDays, 'durationDays'),
+    durationDays,
     sort: filters.sort == null ? 'newest' : requireEnum(filters.sort, SORTS, 'sort'),
     page,
     pageSize: Math.min(pageSize, 50),
@@ -251,7 +260,14 @@ export function classifyChallengeError(error) {
   if (code === 'P0002') return { statusCode: 404, message };
   if (code === '23505' || code === '55000') return { statusCode: 409, message };
   if (code === '54000') return { statusCode: 429, message };
-  if (code === '22023' || message.includes(' is invalid') || message.includes(' is required')) {
+  if (
+    code === '22023'
+    || code === '23514'
+    || message.includes(' is invalid')
+    || message.includes(' is required')
+    || message.includes(' must be ')
+    || message.includes(' is too ')
+  ) {
     return { statusCode: 400, message };
   }
   return { statusCode: 500, message };
