@@ -6,6 +6,7 @@ import { Goals } from './components/Goals';
 import { Programs } from './components/Programs';
 import { Stats } from './components/Stats';
 import { Profile } from './components/Profile';
+import { Competitions } from './components/Competitions';
 
 import { UserProvider, useUser } from './contexts/UserContext';
 
@@ -151,6 +152,9 @@ function AppContent() {
 
       case 'stats':
         return <Stats user={user!} weeklyStats={weeklyStats} />;
+
+      case 'competitions':
+        return <Competitions />;
 
       case 'profile':
         return <Profile user={user!} achievements={achievements} />;
