@@ -32,4 +32,7 @@ test('challenge client exposes all required integration actions', async () => {
   assert.match(screen, /decline_invite/);
   assert.match(screen, /first_to_target/);
   assert.match(screen, /invitedUserId/);
+  assert.match(screen, /metricType: metricForCategory\(form\.category\)/);
+  assert.match(screen, /metricType: metricForCategory\(nextCategory\)/);
+  assert.match(screen, /value=\{form\.metricType\}[\s\S]*?disabled/);
 });
