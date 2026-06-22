@@ -130,6 +130,22 @@ export type ChallengeParticipantStatus =
 export type ChallengeResult = 'pending' | 'winner' | 'loser' | 'draw';
 export type ChallengeSort = 'newest' | 'popular' | 'starting_soon' | 'recommended';
 export type ChallengeScope = 'invitations' | 'active' | 'history' | 'all';
+export type ChallengeResponseAction = 'accept_invite' | 'decline_invite';
+
+export interface ChallengePublicFilters {
+  category?: ChallengeCategory;
+  search?: string;
+  durationDays?: 1 | 3 | 7;
+  sort?: ChallengeSort;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ChallengeListResponse<T> {
+  success: boolean;
+  challenges: T[];
+  error?: string;
+}
 
 export interface ChallengeCatalogItem {
   id: string;
@@ -149,6 +165,9 @@ export interface ChallengeCatalogItem {
   creatorUsername: string | null;
   creatorFirstName: string;
   createdAt: string;
+  challengeStatus: ChallengeStatus;
+  visibility?: ChallengeVisibility;
+  joinMode?: ChallengeJoinMode;
 }
 
 export interface ChallengeParticipant {
@@ -197,4 +216,7 @@ export interface UserChallengeListItem {
   startsAt: string | null;
   endsAt: string | null;
   createdAt: string;
+  isCreator: boolean;
+  durationDays?: 1 | 3 | 7;
+  participantCount?: number;
 }
