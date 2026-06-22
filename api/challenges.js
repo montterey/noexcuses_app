@@ -120,7 +120,7 @@ async function resolveUserId(supabase, telegramUser) {
   return data;
 }
 
-async function callRpc(supabase, name, args) {
+async function callRpc(supabase, name, args = {}) {
   const { data, error } = await supabase.rpc(name, args);
   if (error) throw error;
   return data;
@@ -152,6 +152,7 @@ export default async function handler(req, res) {
     const userId = await resolveUserId(supabase, telegramUser);
 
     if (body.action === 'listPublic') {
+      await callRpc(supabase, 'refresh_challenge_lifecycle');
       const filters = validateCatalogFilters(body.filters);
       const challenges = await callRpc(supabase, 'list_public_challenges', {
         p_category: filters.category,
@@ -211,6 +212,7 @@ export default async function handler(req, res) {
       return json(res, 200, { success: true, cancelled: Boolean(cancelled) });
     }
     if (body.action === 'listMine') {
+      await callRpc(supabase, 'refresh_challenge_lifecycle');
       const scope = body.scope == null ? 'active' : requireEnum(body.scope, SCOPES, 'scope');
       const challenges = await callRpc(supabase, 'list_user_challenges', { p_user_id: userId, p_scope: scope });
       return json(res, 200, { success: true, challenges });

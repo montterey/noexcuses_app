@@ -1,0 +1,175 @@
+name: Validate verified activity scoring
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'api/rewards.js'
+      - 'api/challenges.js'
+      - 'src/hooks/useGoals.ts'
+      - 'src/hooks/usePrograms.ts'
+      - 'supabase/migrations/20260620170000_014_verified_activity_and_challenge_scoring.sql'
+      - 'supabase/migrations/20260620173000_015_once_goal_completion_hardening.sql'
+      - 'supabase/migrations/20260620174500_016_lock_verified_activity_writes.sql'
+      - 'supabase/tests/verified_activity_and_scoring.sql'
+      - 'supabase/tests/once_goal_completion_hardening.sql'
+      - 'tests/verified-activity.test.js'
+      - 'tests/rewards-api.test.js'
+      - '.github/workflows/validate-verified-activity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  node-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run each Node test file
+        run: |
+          for test_file in tests/*.test.js; do
+            echo "Running ${test_file}"
+            node --test "${test_file}"
+          done
+
+      - name: Check API syntax
+        run: |
+          node --check api/rewards.js
+          node --check api/challenges.js
+
+  sql-validation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare disposable PostgreSQL schema
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          CREATE SCHEMA IF NOT EXISTS auth;
+          CREATE OR REPLACE FUNCTION auth.role() RETURNS text LANGUAGE sql STABLE
+          AS $$ SELECT current_setting('request.jwt.claim.role', true) $$;
+          CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE
+          AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+
+          CREATE TABLE public.users (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            telegram_id bigint UNIQUE,
+            username text,
+            first_name text NOT NULL DEFAULT '',
+            xp integer DEFAULT 0,
+            level integer DEFAULT 1,
+            xp_this_week integer DEFAULT 0,
+            total_goals_completed integer DEFAULT 0,
+            streak integer DEFAULT 0,
+            longest_streak integer DEFAULT 0,
+            streak_freeze_count integer DEFAULT 0,
+            streak_freeze_pending_count integer DEFAULT 0
+          );
+          GRANT SELECT,INSERT,UPDATE,DELETE ON public.users TO anon,authenticated;
+
+          CREATE TABLE public.goals (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+            title text NOT NULL,
+            type text NOT NULL DEFAULT 'daily',
+            frequency text,
+            active boolean DEFAULT true,
+            paused boolean DEFAULT false,
+            created_at timestamptz DEFAULT now()
+          );
+          GRANT SELECT,INSERT,UPDATE,DELETE ON public.goals TO anon,authenticated;
+
+          CREATE TABLE public.goal_logs (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            goal_id uuid NOT NULL REFERENCES public.goals(id) ON DELETE CASCADE,
+            user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+            status text NOT NULL,
+            date date NOT NULL DEFAULT CURRENT_DATE,
+            xp_earned integer NOT NULL DEFAULT 0,
+            created_at timestamptz NOT NULL DEFAULT now()
+          );
+          GRANT SELECT,INSERT,UPDATE,DELETE ON public.goal_logs TO anon,authenticated;
+
+          CREATE OR REPLACE FUNCTION public.update_user_streak(p_user_id uuid)
+          RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp AS $$
+          BEGIN
+            UPDATE public.users
+            SET streak=COALESCE(streak,0)+1,
+                longest_streak=GREATEST(COALESCE(longest_streak,0),COALESCE(streak,0)+1)
+            WHERE id=p_user_id;
+          END $$;
+          SQL
+
+      - name: Apply additive migrations before deploy
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620010000_012_atomic_running_program_completion.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620150000_013_challenges_backend_foundation.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620170000_014_verified_activity_and_challenge_scoring.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620173000_015_once_goal_completion_hardening.sql
+
+      - name: Verify old production client remains functional before deploy
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT has_table_privilege('authenticated','public.goal_logs','INSERT') THEN
+              RAISE EXCEPTION 'goal_logs INSERT was locked before production deploy';
+            END IF;
+            IF NOT has_table_privilege('authenticated','public.user_programs','UPDATE') THEN
+              RAISE EXCEPTION 'user_programs UPDATE was locked before production deploy';
+            END IF;
+          END $$;
+          SQL
+
+      - name: Apply post-deploy write lock
+        run: psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/20260620174500_016_lock_verified_activity_writes.sql
+
+      - name: Run SQL scoring and hardening tests
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/verified_activity_and_scoring.sql
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/tests/once_goal_completion_hardening.sql
+
+      - name: Verify final write lock
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF has_table_privilege('authenticated','public.goal_logs','INSERT') THEN
+              RAISE EXCEPTION 'goal_logs INSERT is still available after migration 016';
+            END IF;
+            IF has_table_privilege('authenticated','public.user_programs','UPDATE') THEN
+              RAISE EXCEPTION 'user_programs UPDATE is still available after migration 016';
+            END IF;
+          END $$;
+          SQL

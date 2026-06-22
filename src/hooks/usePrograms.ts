@@ -33,6 +33,7 @@ interface ProgramCompletionApiResponse {
     current_day?: number;
     completed?: boolean;
     xp_awarded?: number;
+    challenge_updates?: number;
   };
   error?: string;
 }
@@ -51,7 +52,6 @@ export function usePrograms() {
 
     try {
       setLoading(true);
-
       const { data, error } = await supabase
         .from('user_programs')
         .select('*')
@@ -61,22 +61,25 @@ export function usePrograms() {
       if (error) throw error;
 
       setPrograms(
-        (data || []).map((p) => {
-          const template = PROGRAM_TEMPLATES[p.program_code as keyof typeof PROGRAM_TEMPLATES] || {
-            title: p.program_code,
+        (data || []).map((program) => {
+          const template = PROGRAM_TEMPLATES[
+            program.program_code as keyof typeof PROGRAM_TEMPLATES
+          ] || {
+            title: program.program_code,
             description: '',
             icon: '🎯',
           };
+
           return {
-            id: p.id,
-            code: p.program_code as ProgramCode,
+            id: program.id,
+            code: program.program_code as ProgramCode,
             title: template.title,
             description: template.description,
             icon: template.icon,
             totalDays: 30,
-            currentDay: p.current_day || 1,
-            isActive: p.active,
-            completed: Boolean(p.completed),
+            currentDay: program.current_day || 1,
+            isActive: program.active,
+            completed: Boolean(program.completed),
           };
         })
       );
@@ -91,7 +94,8 @@ export function usePrograms() {
     fetchPrograms();
   }, [fetchPrograms]);
 
-  const completeRunningDay = async (
+  const completeProgramDay = async (
+    programCode: ProgramCode,
     expectedDay: number,
     programId?: string
   ): Promise<ProgramCompletionResult> => {
@@ -107,7 +111,7 @@ export function usePrograms() {
       body: JSON.stringify({
         action: 'completeProgramDay',
         initData,
-        programCode: 'running',
+        programCode,
         programId,
         expectedDay,
       }),
@@ -136,59 +140,24 @@ export function usePrograms() {
   ): Promise<ProgramCompletionResult> => {
     if (!user) return { success: false, error: 'Пользователь не загружен' };
 
-    const program = programs.find((p) => p.id === programId);
+    const program = programs.find((item) => item.id === programId);
     if (!program) return { success: false, error: 'Программа не найдена' };
 
-    if (program.code === 'running') {
-      try {
-        const result = await completeRunningDay(program.currentDay, program.id);
-        if (result.success) await fetchPrograms();
-        return result;
-      } catch (error) {
-        console.error('Error completing running day:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Не удалось завершить день программы',
-        };
-      }
-    }
-
     try {
-      const newCurrentDay = program.currentDay + 1;
-      const isComplete = newCurrentDay >= 30;
-
-      const { error: programError } = await supabase
-        .from('user_programs')
-        .update({
-          current_day: newCurrentDay,
-          active: !isComplete,
-          completed: isComplete,
-        })
-        .eq('id', programId);
-
-      if (programError) throw programError;
-
-      const xpReward = isComplete ? 500 : 25;
-      const { error: xpError } = await supabase
-        .from('users')
-        .update({ xp: user.xp + xpReward })
-        .eq('id', user.id);
-
-      if (xpError) throw xpError;
-
-      await fetchPrograms();
-      return {
-        success: true,
-        applied: true,
-        currentDay: newCurrentDay,
-        completed: isComplete,
-        xpAwarded: xpReward,
-      };
+      const result = await completeProgramDay(
+        program.code,
+        program.currentDay,
+        program.id
+      );
+      if (result.success) await fetchPrograms();
+      return result;
     } catch (error) {
-      console.error('Error updating program:', error);
+      console.error('Error completing program day:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Не удалось завершить день программы',
+        error: error instanceof Error
+          ? error.message
+          : 'Не удалось завершить день программы',
       };
     }
   };
@@ -198,50 +167,26 @@ export function usePrograms() {
   ): Promise<ProgramCompletionResult> => {
     if (!user) return { success: false, error: 'Пользователь не загружен' };
 
-    if (programCode === 'running') {
-      try {
-        const result = await completeRunningDay(1);
-        if (result.success) await fetchPrograms();
-        return result;
-      } catch (error) {
-        console.error('Error starting running program:', error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Не удалось завершить день программы',
-        };
-      }
-    }
-
     try {
-      const { error } = await supabase
-        .from('user_programs')
-        .upsert({
-          user_id: user.id,
-          program_code: programCode,
-          current_day: 1,
-          active: true,
-          completed: false,
-          start_date: new Date().toISOString().split('T')[0],
-        }, { onConflict: 'user_id,program_code' });
-
-      if (error) throw error;
-
-      await fetchPrograms();
-      return {
-        success: true,
-        applied: true,
-        currentDay: 1,
-        completed: false,
-        xpAwarded: 0,
-      };
+      const result = await completeProgramDay(programCode, 1);
+      if (result.success) await fetchPrograms();
+      return result;
     } catch (error) {
       console.error('Error starting program:', error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Не удалось запустить программу',
+        error: error instanceof Error
+          ? error.message
+          : 'Не удалось завершить первый день программы',
       };
     }
   };
 
-  return { programs, loading, startOrContinueProgram, startNewProgram, refreshPrograms: fetchPrograms };
+  return {
+    programs,
+    loading,
+    startOrContinueProgram,
+    startNewProgram,
+    refreshPrograms: fetchPrograms,
+  };
 }

@@ -11,9 +11,16 @@ test('achievement failure does not cancel a saved program day', async () => {
     xp_awarded: 25,
   };
   const loggedErrors = [];
+  const rpcCalls = [];
   const originalConsoleError = console.error;
   const supabase = {
     async rpc(name) {
+      rpcCalls.push(name);
+
+      if (name === 'refresh_challenge_lifecycle') {
+        return { data: { activated: 0, expired: 0, completed: 0 }, error: null };
+      }
+
       if (name === 'complete_program_day') {
         return { data: completion, error: null };
       }
@@ -40,6 +47,10 @@ test('achievement failure does not cancel a saved program day', async () => {
     assert.deepEqual(response.result, completion);
     assert.equal(response.achievementRewards, 0);
     assert.equal(loggedErrors.length, 1);
+    assert.deepEqual(rpcCalls.slice(0, 2), [
+      'refresh_challenge_lifecycle',
+      'complete_program_day',
+    ]);
   } finally {
     console.error = originalConsoleError;
   }
@@ -54,6 +65,10 @@ test('an idempotent completion response keeps applied false and zero XP', async 
   };
   const supabase = {
     async rpc(name) {
+      if (name === 'refresh_challenge_lifecycle') {
+        return { data: { activated: 0, expired: 0, completed: 0 }, error: null };
+      }
+
       if (name === 'complete_program_day') {
         return { data: completion, error: null };
       }
