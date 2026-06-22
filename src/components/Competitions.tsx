@@ -9,6 +9,7 @@ import {
   X,
 } from 'lucide-react';
 import { useChallenges } from '../hooks/useChallenges';
+import { isValidUuid, metricForCategory } from '../lib/challengeRules';
 import {
   ChallengeCatalogItem,
   ChallengeCategory,
@@ -270,11 +271,12 @@ export function Competitions() {
   const [sort, setSort] = useState<'newest' | 'popular' | 'starting_soon' | 'recommended'>('newest');
   const [scope, setScope] = useState<Exclude<ChallengeScope, 'all'>>('active');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: '',
     description: '',
     category: 'goals' as ChallengeCategory,
-    metricType: 'goals_completed' as ChallengeMetric,
+    metricType: metricForCategory('goals'),
     mode: 'highest_score' as ChallengeMode,
     targetValue: '',
     durationDays: 3 as 1 | 3 | 7,
@@ -342,19 +344,26 @@ export function Competitions() {
   const handleCreate = async (event: FormEvent) => {
     event.preventDefault();
     setSuccessMessage(null);
+    setValidationError(null);
     clearActionError();
+
+    const invitedUserId = form.invitedUserId.trim();
+    if (invitedUserId && !isValidUuid(invitedUserId)) {
+      setValidationError('ID приглашённого пользователя должен быть корректным UUID');
+      return;
+    }
 
     const input: CreateChallengeInput = {
       title: form.title.trim(),
       description: form.description.trim() || undefined,
       category: form.category,
-      metricType: form.metricType,
+      metricType: metricForCategory(form.category),
       mode: form.mode,
       targetValue: form.mode === 'first_to_target' ? Number(form.targetValue) : undefined,
       durationDays: form.durationDays,
       visibility: form.visibility,
       joinMode: form.joinMode,
-      invitedUserId: form.invitedUserId.trim() || undefined,
+      invitedUserId: invitedUserId || undefined,
     };
 
     const result = await create(input);
@@ -389,6 +398,7 @@ export function Competitions() {
             onClick={() => {
               setSection(id);
               setSuccessMessage(null);
+              setValidationError(null);
               clearActionError();
             }}
             className={`py-2 rounded-md text-sm font-medium transition-colors ${
@@ -403,6 +413,11 @@ export function Competitions() {
       {actionError && (
         <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
           {actionError}
+        </div>
+      )}
+      {validationError && (
+        <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
+          {validationError}
         </div>
       )}
       {successMessage && (
@@ -516,7 +531,18 @@ export function Competitions() {
           <div className="grid grid-cols-2 gap-3">
             <label>
               <span className="block text-sm text-gray-300 mb-1.5">Категория</span>
-              <select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as ChallengeCategory })} className={selectClass}>
+              <select
+                value={form.category}
+                onChange={(event) => {
+                  const nextCategory = event.target.value as ChallengeCategory;
+                  setForm({
+                    ...form,
+                    category: nextCategory,
+                    metricType: metricForCategory(nextCategory),
+                  });
+                }}
+                className={selectClass}
+              >
                 {CATEGORY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </label>
@@ -529,7 +555,12 @@ export function Competitions() {
           </div>
           <label className="block">
             <span className="block text-sm text-gray-300 mb-1.5">Что считаем</span>
-            <select value={form.metricType} onChange={(event) => setForm({ ...form, metricType: event.target.value as ChallengeMetric })} className={selectClass}>
+            <select
+              value={form.metricType}
+              disabled
+              aria-readonly="true"
+              className={`${selectClass} opacity-70 cursor-not-allowed`}
+            >
               <option value="goals_completed">Выполненные цели</option>
               <option value="program_days_completed">Дни программ</option>
             </select>
