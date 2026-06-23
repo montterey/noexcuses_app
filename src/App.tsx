@@ -125,6 +125,7 @@ function AppContent() {
             onGoalFreeze={handleGoalFreeze}
             onGoalPostpone={handleGoalPostpone}
             onAddGoal={handleAddGoal}
+            onNavigate={setActiveTab}
           />
         );
 
@@ -169,6 +170,7 @@ function AppContent() {
             onGoalFreeze={handleGoalFreeze}
             onGoalPostpone={handleGoalPostpone}
             onAddGoal={handleAddGoal}
+            onNavigate={setActiveTab}
           />
         );
     }
