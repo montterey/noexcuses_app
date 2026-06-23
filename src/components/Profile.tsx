@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Settings, Trophy, Globe, Bell, ChevronRight, X, Snowflake } from 'lucide-react';
-import { User, Achievement } from '../types';
+import { Bell, ChevronRight, Globe, Settings, Snowflake, Trophy, X } from 'lucide-react';
+import { Achievement, User } from '../types';
+import { AppCard, PageHeader, ProgressBar, SegmentedControl, StatCard, StatusBadge } from './ui/Primitives';
 
 interface ProfileProps {
   user: User;
@@ -14,193 +15,116 @@ function getRequiredXp(level: number): number {
 export function Profile({ user, achievements }: ProfileProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'achievements'>('profile');
   const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
-
-  const settings = {
-    language: 'RU',
-    notificationTime: '09:00',
-  };
-
-  const currentLevelXp = user.xp % getRequiredXp(user.level);
-  const xpPercent = (currentLevelXp / getRequiredXp(user.level)) * 100;
-  const unlockedCount = achievements.filter((a) => a.unlocked).length;
+  const requiredXp = getRequiredXp(user.level);
+  const currentLevelXp = user.xp % requiredXp;
+  const xpPercent = (currentLevelXp / requiredXp) * 100;
+  const unlockedCount = achievements.filter((achievement) => achievement.unlocked).length;
 
   return (
-    <div className="p-4 pb-20">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Профиль</h1>
-        <button className="w-10 h-10 rounded-full bg-surface flex items-center justify-center">
-          <Settings size={20} className="text-gray-400" />
-        </button>
-      </div>
+    <div className="safe-area-top px-4 pb-32 pt-4">
+      <PageHeader
+        eyebrow="Аккаунт"
+        title="Профиль"
+        subtitle="Уровень, достижения и настройки"
+        action={(
+          <button type="button" className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/[0.07] bg-surface text-zinc-500">
+            <Settings size={19} />
+          </button>
+        )}
+      />
 
-      <div className="flex bg-surface rounded-xl p-1 mb-6">
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-            activeTab === 'profile' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          Профиль
-        </button>
-        <button
-          onClick={() => setActiveTab('achievements')}
-          className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-            activeTab === 'achievements' ? 'bg-accent text-white' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          <Trophy size={16} />
-          Достижения
-        </button>
-      </div>
+      <SegmentedControl
+        value={activeTab}
+        onChange={setActiveTab}
+        className="mb-5"
+        options={[
+          { value: 'profile', label: 'Профиль' },
+          { value: 'achievements', label: 'Достижения', icon: <Trophy size={14} /> },
+        ]}
+      />
 
       {activeTab === 'profile' ? (
         <>
-          <div className="bg-surface rounded-2xl p-5 border border-white/5 mb-4">
+          <AppCard className="mb-4 p-5">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-accent to-accent-600 flex items-center justify-center text-2xl font-bold">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-accent/25 bg-accent/10 display-heading text-2xl text-red-100 shadow-red-soft">
                 {user.firstName[0]}
               </div>
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold">{user.firstName}</h2>
-                <p className="text-gray-400 text-sm">@{user.username}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-accent">NoExcuses</p>
+                <h2 className="display-heading mt-1 truncate text-xl text-zinc-100">{user.firstName}</h2>
+                <p className="truncate text-sm text-zinc-500">@{user.username}</p>
               </div>
             </div>
+            <div className="mt-5 border-t border-white/[0.07] pt-4">
+              <div className="mb-2 flex justify-between text-xs">
+                <span className="font-semibold text-zinc-300">Уровень {user.level}</span>
+                <span className="text-zinc-500">{currentLevelXp}/{requiredXp} XP</span>
+              </div>
+              <ProgressBar value={xpPercent} />
+            </div>
+          </AppCard>
 
-            <div className="mt-4 pt-4 border-t border-white/5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-gray-400">Уровень {user.level}</span>
-                <span className="text-sm text-gray-400">{currentLevelXp}/{getRequiredXp(user.level)} XP</span>
-              </div>
-              <div className="h-2 bg-dark-300 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-accent to-accent-400 rounded-full"
-                  style={{ width: `${xpPercent}%` }}
-                />
-              </div>
-            </div>
+          <div className="mb-4 grid grid-cols-2 gap-3">
+            <StatCard label="Серия" value={user.streak} detail="дней дисциплины" />
+            <StatCard label="Заморозки" value={user.streakFreezeCount} detail="доступно" icon={<Snowflake size={17} className="text-cyan-300" />} tone="cyan" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="bg-surface rounded-2xl p-4 border border-white/5">
-              <p className="text-xs text-gray-400 mb-1">Текущая серия</p>
-              <p className="text-2xl font-bold">{user.streak}</p>
-            </div>
-
-            <div className="bg-surface rounded-2xl p-4 border border-white/5">
-              <div className="flex items-center gap-2 mb-1">
-                <Snowflake size={16} className="text-cyan-200" />
-                <p className="text-xs text-gray-400">Заморозки</p>
-              </div>
-              <p className="text-2xl font-bold text-cyan-100">{user.streakFreezeCount}</p>
-            </div>
-          </div>
-
-          <div className="bg-surface rounded-2xl border border-white/5 overflow-hidden">
-            <h3 className="px-5 pt-5 pb-3 text-sm font-medium text-gray-400">Настройки</h3>
-
-            <button className="w-full flex items-center justify-between p-4 hover:bg-surface-light transition-colors">
-              <div className="flex items-center gap-3">
-                <Globe size={20} className="text-gray-400" />
-                <span className="font-medium">Язык</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400">{settings.language}</span>
-                <ChevronRight size={18} className="text-gray-500" />
-              </div>
+          <AppCard className="overflow-hidden">
+            <p className="border-b border-white/[0.07] px-4 py-3 text-[10px] font-bold uppercase tracking-[0.06em] text-accent">Настройки</p>
+            <button className="flex min-h-14 w-full items-center justify-between px-4 py-3 text-left hover:bg-white/[0.03]">
+              <span className="flex items-center gap-3 font-semibold text-zinc-200"><Globe size={18} className="text-zinc-500" />Язык</span>
+              <span className="flex items-center gap-2 text-sm text-zinc-500">RU<ChevronRight size={17} /></span>
             </button>
-
-            <button className="w-full flex items-center justify-between p-4 hover:bg-surface-light transition-colors border-t border-white/5">
-              <div className="flex items-center gap-3">
-                <Bell size={20} className="text-gray-400" />
-                <span className="font-medium">Время уведомлений</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400">{settings.notificationTime}</span>
-                <ChevronRight size={18} className="text-gray-500" />
-              </div>
+            <button className="flex min-h-14 w-full items-center justify-between border-t border-white/[0.07] px-4 py-3 text-left hover:bg-white/[0.03]">
+              <span className="flex items-center gap-3 font-semibold text-zinc-200"><Bell size={18} className="text-zinc-500" />Уведомления</span>
+              <span className="flex items-center gap-2 text-sm text-zinc-500">09:00<ChevronRight size={17} /></span>
             </button>
-          </div>
+          </AppCard>
         </>
       ) : (
         <>
-          <div className="text-center mb-4">
-            <p className="text-gray-400 text-sm">
-              Открыто {unlockedCount} из {achievements.length}
-            </p>
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="display-heading text-lg text-zinc-100">Коллекция</h2>
+              <p className="mt-1 text-xs text-zinc-500">Открыто {unlockedCount} из {achievements.length}</p>
+            </div>
+            <StatusBadge tone="red">{unlockedCount}/{achievements.length}</StatusBadge>
           </div>
-
           <div className="grid grid-cols-3 gap-3">
             {achievements.map((achievement) => (
               <button
                 key={achievement.id}
+                type="button"
                 onClick={() => setSelectedAchievement(achievement)}
-                className={`bg-surface rounded-xl p-3 border border-white/5 text-center transition-all active:scale-95 ${
-                  !achievement.unlocked ? 'opacity-50' : 'border-accent/30'
-                }`}
+                className={`rounded-xl border bg-surface p-3 text-center active:scale-[0.98] ${achievement.unlocked ? 'border-accent/25' : 'border-white/[0.07] opacity-45'}`}
               >
-                <div
-                  className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center text-2xl mb-2 ${
-                    achievement.unlocked ? 'bg-accent/20' : 'bg-surface-light'
-                  }`}
-                >
+                <div className={`mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl text-2xl ${achievement.unlocked ? 'bg-accent/10' : 'bg-surface-light'}`}>
                   {achievement.icon}
                 </div>
-                <p className={`text-xs font-medium ${achievement.unlocked ? '' : 'text-gray-500'}`}>
-                  {achievement.title}
-                </p>
-                {achievement.unlocked && achievement.unlockedAt && (
-                  <p className="text-[10px] text-gray-500 mt-1">{achievement.unlockedAt}</p>
-                )}
+                <p className="line-clamp-2 text-[11px] font-semibold leading-snug text-zinc-300">{achievement.title}</p>
               </button>
             ))}
           </div>
         </>
       )}
 
-      {/* Модалка достижения */}
       {selectedAchievement && (
-        <div
-          className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center"
-          onClick={() => setSelectedAchievement(null)}
-        >
-          <div
-            className="w-full max-w-[430px] bg-dark-400 rounded-t-3xl p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-end mb-4">
-              <button
-                onClick={() => setSelectedAchievement(null)}
-                className="w-8 h-8 rounded-full bg-surface flex items-center justify-center"
-              >
-                <X size={16} className="text-gray-400" />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 px-2 backdrop-blur-sm" onClick={() => setSelectedAchievement(null)}>
+          <div className="w-full max-w-[430px] rounded-t-[14px] border border-b-0 border-white/[0.07] bg-[#0D0D0E] p-5" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-4 flex justify-end">
+              <button type="button" onClick={() => setSelectedAchievement(null)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-surface text-zinc-400"><X size={17} /></button>
             </div>
-
-            <div className="text-center mb-6">
-              <div
-                className={`w-20 h-20 mx-auto rounded-2xl flex items-center justify-center text-4xl mb-4 ${
-                  selectedAchievement.unlocked ? 'bg-accent/20' : 'bg-surface-light'
-                }`}
-              >
-                {selectedAchievement.icon}
+            <div className="text-center">
+              <div className={`mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-xl text-4xl ${selectedAchievement.unlocked ? 'border border-accent/25 bg-accent/10 shadow-red-soft' : 'bg-surface-light'}`}>{selectedAchievement.icon}</div>
+              <p className="text-[10px] font-bold uppercase text-accent">Достижение</p>
+              <h2 className="display-heading mt-1 text-xl text-zinc-100">{selectedAchievement.title}</h2>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-500">{selectedAchievement.description}</p>
+              <div className={`mt-5 rounded-xl border p-4 ${selectedAchievement.unlocked ? 'border-accent/25 bg-accent/[0.06]' : 'border-white/[0.07] bg-surface'}`}>
+                <p className={selectedAchievement.unlocked ? 'font-semibold text-red-200' : 'text-sm text-zinc-500'}>
+                  {selectedAchievement.unlocked ? 'Открыто' : 'Ещё не открыто'}
+                </p>
               </div>
-              <h2 className="text-xl font-bold mb-2">{selectedAchievement.title}</h2>
-              <p className="text-gray-400 text-sm">{selectedAchievement.description}</p>
-            </div>
-
-            <div className={`rounded-xl p-4 text-center ${
-              selectedAchievement.unlocked ? 'bg-accent/10 border border-accent/30' : 'bg-surface'
-            }`}>
-              {selectedAchievement.unlocked ? (
-                <div>
-                  <p className="text-accent font-semibold">✅ Открыто</p>
-                  {selectedAchievement.unlockedAt && (
-                    <p className="text-gray-400 text-sm mt-1">{selectedAchievement.unlockedAt}</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-gray-400 text-sm">🔒 Ещё не открыто</p>
-              )}
             </div>
           </div>
         </div>
