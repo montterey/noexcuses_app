@@ -94,6 +94,10 @@ export function HeroCard({
   children?: ReactNode;
   className?: string;
 }) {
+  const resolvedImage = image?.startsWith('/redesign/')
+    ? image.replace(/\.(?:jpe?g|png)$/i, '.svg')
+    : image;
+
   return (
     <section
       className={classes(
@@ -104,7 +108,7 @@ export function HeroCard({
         backgroundImage: [
           'linear-gradient(90deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.58) 54%, rgba(0,0,0,0.2) 100%)',
           'linear-gradient(180deg, rgba(225,45,45,0.32), rgba(0,0,0,0.24))',
-          image ? `url("${image}")` : 'linear-gradient(135deg, rgba(225,45,45,0.28), rgba(24,24,27,0.85))',
+          resolvedImage ? `url("${resolvedImage}")` : 'linear-gradient(135deg, rgba(225,45,45,0.28), rgba(24,24,27,0.85))',
         ].join(', '),
       }}
     >
