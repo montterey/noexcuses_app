@@ -29,17 +29,23 @@ test('bottom navigation keeps all tabs and safe-area spacing', async () => {
   assert.ok(navigation.includes('min-h-[72px]'));
 });
 
-test('dashboard preserves goal actions and add-goal wiring', async () => {
-  const dashboard = await read('src/components/Dashboard.tsx');
+test('dashboard preserves goal actions and wires every quick action', async () => {
+  const [dashboard, app] = await Promise.all([
+    read('src/components/Dashboard.tsx'),
+    read('src/App.tsx'),
+  ]);
 
   assert.ok(dashboard.includes('onGoalDone(goal.id)'));
   assert.ok(dashboard.includes('onGoalSkip(goal.id)'));
   assert.ok(dashboard.includes('onGoalFreeze(goal.id)'));
   assert.ok(dashboard.includes('await onAddGoal('));
   assert.ok(dashboard.includes("goal.frequency === 'daily'"));
+  assert.ok(dashboard.includes("onNavigate('competitions')"));
+  assert.ok(dashboard.includes("onNavigate('programs')"));
+  assert.ok(app.includes('onNavigate={setActiveTab}'));
 });
 
-test('shared primitives cover the redesigned screens', async () => {
+test('shared primitives cover the redesigned screens and resolve local assets', async () => {
   const primitives = await read('src/components/ui/Primitives.tsx');
 
   for (const primitive of [
@@ -61,6 +67,9 @@ test('shared primitives cover the redesigned screens', async () => {
   ]) {
     assert.ok(primitives.includes(`export function ${primitive}`));
   }
+
+  assert.ok(primitives.includes("image?.startsWith('/redesign/')"));
+  assert.ok(primitives.includes(".replace(/\\.(?:jpe?g|png)$/i, '.svg')"));
 });
 
 test('reference match screens use poster primitives and image slots', async () => {
@@ -74,8 +83,8 @@ test('reference match screens use poster primitives and image slots', async () =
     read('src/redesign-overrides.css'),
   ]);
 
-  assert.ok(dashboard.includes('/redesign/dashboard-xp.jpg'));
-  assert.ok(dashboard.includes('/redesign/focus-card.jpg'));
+  assert.ok(dashboard.includes('/redesign/dashboard-xp.svg'));
+  assert.ok(dashboard.includes('/redesign/focus-card.svg'));
   assert.ok(dashboard.includes('CircularProgress'));
   assert.ok(dashboard.includes('ActionTile'));
   assert.ok(programs.includes('MY PROGRAMS'));
@@ -94,6 +103,22 @@ test('reference match screens use poster primitives and image slots', async () =
   assert.ok(goals.includes('PosterTabs'));
   assert.ok(overrides.includes('article.bg-surface'));
   assert.ok(overrides.includes('grid.grid-cols-3.gap-2.mt-3'));
+});
+
+test('all cinematic image assets are committed', async () => {
+  const assets = await Promise.all([
+    read('public/redesign/dashboard-xp.svg'),
+    read('public/redesign/focus-card.svg'),
+    read('public/redesign/program-hero.svg'),
+    read('public/redesign/workout-card.svg'),
+    read('public/redesign/challenge-featured.svg'),
+    read('public/redesign/challenge-badge.svg'),
+  ]);
+
+  for (const asset of assets) {
+    assert.ok(asset.startsWith('<svg'));
+    assert.ok(asset.includes('data:image/jpeg;base64,'));
+  }
 });
 
 test('cinematic shell keeps mobile overflow guarded', async () => {
