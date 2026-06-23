@@ -74,9 +74,10 @@ select {
     overflow-x: hidden;
     color: #f5f5f5;
     background:
-      radial-gradient(circle at 100% -10%, rgba(225, 45, 45, 0.12), transparent 30%),
-      radial-gradient(circle at -20% 45%, rgba(127, 29, 29, 0.08), transparent 36%),
-      #070707;
+      linear-gradient(180deg, rgba(225, 45, 45, 0.08), rgba(7, 7, 7, 0) 16rem),
+      radial-gradient(120% 55% at 50% -10%, rgba(225, 45, 45, 0.23), rgba(69, 10, 10, 0.08) 38%, transparent 72%),
+      repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 7px),
+      #050505;
   }
 
   .page-container {
@@ -87,6 +88,23 @@ select {
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
     overflow-x: hidden;
     background: transparent;
+    position: relative;
+  }
+
+  .page-container::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(90deg, rgba(0, 0, 0, 0.62), transparent 24%, transparent 76%, rgba(0, 0, 0, 0.62)),
+      linear-gradient(180deg, transparent 48%, rgba(0, 0, 0, 0.62));
+  }
+
+  .page-container > * {
+    position: relative;
+    z-index: 1;
   }
 
   .page-container > div:not(.safe-area-top) {
@@ -98,7 +116,8 @@ select {
   .page-container h2 {
     font-family: 'Roboto Condensed', 'Arial Narrow', 'Inter', system-ui, sans-serif;
     font-weight: 800;
-    letter-spacing: -0.015em;
+    letter-spacing: 0;
+    text-transform: uppercase;
   }
 
   .page-container h1 {
@@ -107,6 +126,28 @@ select {
 
   .red-glow {
     box-shadow: 0 0 28px rgba(225, 45, 45, 0.16);
+  }
+
+  .poster-overline {
+    color: #f87171;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .cinematic-card {
+    background-color: #101011;
+    background-position: center;
+    background-size: cover;
+  }
+
+  .athletic-panel {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 28%),
+      linear-gradient(180deg, rgba(225, 45, 45, 0.08), rgba(18, 18, 20, 0.96));
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.32);
   }
 
   .page-container .bg-surface {
