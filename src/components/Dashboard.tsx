@@ -13,6 +13,7 @@ interface DashboardProps {
   onGoalFreeze: (goalId: string) => void;
   onGoalPostpone: (goalId: string, time: string) => Promise<boolean>;
   onAddGoal: (goal: { title: string; type: GoalFrequency; time?: string; why?: string }) => Promise<AddGoalResult>;
+  onNavigate: (tab: string) => void;
 }
 
 function getRequiredXp(level: number): number {
@@ -30,7 +31,7 @@ const getCreateErrorMessage = (message?: string) => (
   message ? `Не удалось создать цель: ${message}` : 'Не удалось создать цель'
 );
 
-export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, onAddGoal }: DashboardProps) {
+export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, onAddGoal, onNavigate }: DashboardProps) {
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
@@ -93,7 +94,7 @@ export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, o
       <section className="mb-5 space-y-3" aria-label="Прогресс пользователя">
         <div className="grid grid-cols-[0.88fr_1.12fr] gap-3">
           <MetricCard label="Level" value={user.level} detail={`${currentLevelXp}/${requiredXp} XP`} icon={<ShieldCheck size={17} className="text-accent" />} />
-          <HeroCard overline="Total XP" title={user.xp.toLocaleString('ru-RU')} subtitle={`+${user.xpThisWeek || 0} XP за неделю`} image="/redesign/dashboard-xp.jpg" className="min-h-[158px] p-4">
+          <HeroCard overline="Total XP" title={user.xp.toLocaleString('ru-RU')} subtitle={`+${user.xpThisWeek || 0} XP за неделю`} image="/redesign/dashboard-xp.svg" className="min-h-[158px] p-4">
             <ProgressBar value={xpPercent} className="h-2" />
           </HeroCard>
         </div>
@@ -108,8 +109,8 @@ export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, o
 
         <div className="grid grid-cols-3 gap-2">
           <ActionTile icon={<Plus size={18} className="text-accent" />} label="Goal" onClick={openModal} />
-          <ActionTile icon={<Trophy size={18} className="text-accent" />} label="Win" />
-          <ActionTile icon={<Dumbbell size={18} className="text-accent" />} label="Train" />
+          <ActionTile icon={<Trophy size={18} className="text-accent" />} label="Win" onClick={() => onNavigate('competitions')} />
+          <ActionTile icon={<Dumbbell size={18} className="text-accent" />} label="Train" onClick={() => onNavigate('programs')} />
         </div>
 
         <div className="flex items-center justify-between rounded-[16px] border border-cyan-400/20 bg-cyan-400/[0.06] px-4 py-3">
@@ -179,7 +180,7 @@ export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, o
         )}
       </section>
 
-      <HeroCard overline="Focus" title="Не жди мотивации" subtitle="Закрой первый пункт. Последовательность сильнее идеального настроения." image="/redesign/focus-card.jpg" className="min-h-[172px]" />
+      <HeroCard overline="Focus" title="Не жди мотивации" subtitle="Закрой первый пункт. Последовательность сильнее идеального настроения." image="/redesign/focus-card.svg" className="min-h-[172px]" />
 
       <button type="button" onClick={openModal} aria-label="Добавить цель" className="fixed bottom-[calc(98px+env(safe-area-inset-bottom))] right-[max(16px,calc((100vw-430px)/2+16px))] z-30 flex h-12 w-12 items-center justify-center rounded-[14px] bg-accent text-white shadow-red-soft transition-colors hover:bg-accent-600 active:bg-accent-600">
         <Plus size={23} />
