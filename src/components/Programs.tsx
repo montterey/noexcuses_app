@@ -1,15 +1,9 @@
-import { useRef, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
-import {
-  Program,
-  ProgramCode,
-  ProgramCompletionResult,
-  ProgramDayContent,
-  ProgramDayType,
-  ProgramExercise,
-} from '../types';
+import { useMemo, useRef, useState } from 'react';
+import { CalendarDays, ChevronRight, Play, Target } from 'lucide-react';
+import { Program, ProgramCode, ProgramCompletionResult, ProgramDayContent, ProgramDayType, ProgramExercise } from '../types';
 import { ProgramDetail } from './ProgramDetail';
 import { supabase } from '../lib/supabase';
+import { AppCard, CircularProgress, HeroCard, PosterTabs, ProgressBar, SectionHeader, StatusBadge } from './ui/Primitives';
 
 interface ProgramsProps {
   programs: Program[];
@@ -17,11 +11,12 @@ interface ProgramsProps {
   onStartNewProgram: (code: ProgramCode) => Promise<ProgramCompletionResult>;
 }
 
+type ProgramTab = 'mine' | 'explore';
+
 const ALL_PROGRAMS: Array<{
   code: ProgramCode;
   title: string;
   description: string;
-  longDescription: string;
   result: string;
   difficulty: string;
   duration: string;
@@ -29,72 +24,15 @@ const ALL_PROGRAMS: Array<{
   icon: string;
   accent: string;
 }> = [
-  {
-    code: 'fitness',
-    title: '30-дневная физподготовка',
-    description: 'Ежедневные тренировки для силы и выносливости',
-    longDescription:
-      'Базовая программа для тела: силовые упражнения, кардио, растяжка и восстановление. Подходит, чтобы втянуться в регулярные тренировки без сложного инвентаря.',
-    result: 'Сильнее тело, больше энергии и привычка тренироваться',
-    difficulty: 'Средняя',
-    duration: '10–25 мин/день',
-    format: 'Силовые + кардио + растяжка',
-    icon: '💪',
-    accent: 'from-orange-500/25 to-red-500/10',
-  },
-  {
-    code: 'running',
-    title: '30 дней бега',
-    description: 'Мягкий вход в бег через интервалы, ходьбу и восстановление',
-    longDescription:
-      'Программа для новичка: разминка, лёгкие интервалы бег/ходьба, техника, заминка и растяжка. Нагрузка растёт постепенно, чтобы не перегореть и не перегрузиться.',
-    result: 'Выносливость, уверенность в беге и регулярное кардио',
-    difficulty: 'Лёгкая → средняя',
-    duration: '15–35 мин/день',
-    format: 'Бег, ходьба, техника, восстановление',
-    icon: '🏃',
-    accent: 'from-red-500/25 to-orange-500/10',
-  },
-  {
-    code: 'sleep',
-    title: '30 дней качественного сна',
-    description: 'Режим, вечерние ритуалы и спокойное засыпание',
-    longDescription:
-      'Программа помогает стабилизировать режим сна: убрать телефон перед сном, добавить дыхание, растяжку, утренний свет и простые вечерние ритуалы.',
-    result: 'Лучшее засыпание, стабильный режим и больше восстановления',
-    difficulty: 'Лёгкая',
-    duration: '5–20 мин/день',
-    format: 'Задания + дыхание + растяжка + дневник сна',
-    icon: '😴',
-    accent: 'from-blue-500/25 to-purple-500/10',
-  },
-  {
-    code: 'reading',
-    title: '30 дней чтения',
-    description: 'Сформируй привычку читать каждый день без телефона',
-    longDescription:
-      'Программа не просто заставляет читать. Она учит выбирать книгу, читать сфокусированно, делать заметки, пересказывать идеи и закреплять понимание.',
-    result: 'Привычка чтения, концентрация и лучшее запоминание',
-    difficulty: 'Лёгкая',
-    duration: '10–25 мин/день',
-    format: 'Чтение + заметки + пересказ + фокус-сессии',
-    icon: '📚',
-    accent: 'from-green-500/25 to-emerald-500/10',
-  },
+  { code: 'fitness', title: '30-дневная физподготовка', description: 'Ежедневные тренировки для силы и выносливости', result: 'Сильнее тело, больше энергии и привычка тренироваться', difficulty: 'Средняя', duration: '10–25 мин/день', format: 'Силовые + кардио + растяжка', icon: '💪', accent: 'from-orange-500/25 to-red-500/10' },
+  { code: 'running', title: '30 дней бега', description: 'Мягкий вход в бег через интервалы, ходьбу и восстановление', result: 'Выносливость, уверенность в беге и регулярное кардио', difficulty: 'Лёгкая → средняя', duration: '15–35 мин/день', format: 'Бег, ходьба, техника, восстановление', icon: '🏃', accent: 'from-red-500/25 to-orange-500/10' },
+  { code: 'sleep', title: '30 дней качественного сна', description: 'Режим, вечерние ритуалы и спокойное засыпание', result: 'Лучшее засыпание, стабильный режим и больше восстановления', difficulty: 'Лёгкая', duration: '5–20 мин/день', format: 'Задания + дыхание + растяжка + дневник сна', icon: '😴', accent: 'from-blue-500/25 to-purple-500/10' },
+  { code: 'reading', title: '30 дней чтения', description: 'Сформируй привычку читать каждый день без телефона', result: 'Привычка чтения, концентрация и лучшее запоминание', difficulty: 'Лёгкая', duration: '10–25 мин/день', format: 'Чтение + заметки + пересказ + фокус-сессии', icon: '📚', accent: 'from-green-500/25 to-emerald-500/10' },
 ];
 
-export function Programs({
-  programs,
-  onStartProgram,
-  onStartNewProgram,
-}: ProgramsProps) {
-  const [selectedProgram, setSelectedProgram] = useState<{
-    code: ProgramCode;
-    title: string;
-    programId?: string;
-    currentDay: number;
-  } | null>(null);
-
+export function Programs({ programs, onStartProgram, onStartNewProgram }: ProgramsProps) {
+  const [activeTab, setActiveTab] = useState<ProgramTab>('explore');
+  const [selectedProgram, setSelectedProgram] = useState<{ code: ProgramCode; title: string; programId?: string; currentDay: number } | null>(null);
   const [dayContent, setDayContent] = useState<ProgramDayContent | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
@@ -102,6 +40,12 @@ export function Programs({
   const [completionAlreadySaved, setCompletionAlreadySaved] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const contentRequestId = useRef(0);
+
+  const activePrograms = programs.filter((program) => program.isActive && !program.completed);
+  const featuredProgram = (activePrograms[0] ? ALL_PROGRAMS.find((template) => template.code === activePrograms[0].code) : ALL_PROGRAMS.find((template) => template.code === 'running')) ?? ALL_PROGRAMS[0]!;
+  const featuredUserProgram = programs.find((program) => program.code === featuredProgram.code);
+  const programLookup = useMemo(() => new Map(programs.map((program) => [program.code, program])), [programs]);
+  const visiblePrograms = activeTab === 'mine' ? ALL_PROGRAMS.filter((template) => programLookup.has(template.code)) : ALL_PROGRAMS;
 
   const closeProgram = () => {
     contentRequestId.current += 1;
@@ -116,35 +60,17 @@ export function Programs({
 
   const parseExercises = (value: unknown): ProgramExercise[] => {
     const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-
-    if (!Array.isArray(parsed)) {
-      throw new Error('Invalid program exercises');
-    }
-
-    return parsed.filter((item): item is ProgramExercise => (
-      typeof item === 'object'
-      && item !== null
-      && typeof (item as ProgramExercise).name === 'string'
-      && ['string', 'number'].includes(typeof (item as ProgramExercise).reps)
-    ));
+    if (!Array.isArray(parsed)) throw new Error('Invalid program exercises');
+    return parsed.filter((item): item is ProgramExercise => typeof item === 'object' && item !== null && typeof (item as ProgramExercise).name === 'string' && ['string', 'number'].includes(typeof (item as ProgramExercise).reps));
   };
 
-  const openProgram = async (
-    template: (typeof ALL_PROGRAMS)[number],
-    userProgram?: Program
-  ) => {
+  const openProgram = async (template: (typeof ALL_PROGRAMS)[number], userProgram?: Program) => {
     if (template.code === 'running' && userProgram?.completed) return;
-
     const currentDay = userProgram?.currentDay || 1;
     const requestId = contentRequestId.current + 1;
     contentRequestId.current = requestId;
 
-    setSelectedProgram({
-      code: template.code,
-      title: template.title,
-      programId: userProgram?.id,
-      currentDay,
-    });
+    setSelectedProgram({ code: template.code, title: template.title, programId: userProgram?.id, currentDay });
     setDayContent(null);
     setContentError(null);
     setCompletionError(null);
@@ -152,64 +78,30 @@ export function Programs({
     setContentLoading(true);
 
     try {
-      const { data, error } = await supabase
-        .from('program_content')
-        .select('day_number, title, type, exercises')
-        .eq('program_code', template.code)
-        .eq('day_number', currentDay)
-        .maybeSingle();
-
+      const { data, error } = await supabase.from('program_content').select('day_number, title, type, exercises').eq('program_code', template.code).eq('day_number', currentDay).maybeSingle();
       if (error) throw error;
       if (!data) throw new Error('Program content not found');
       if (requestId !== contentRequestId.current) return;
-
-      setDayContent({
-        day_number: Number(data.day_number),
-        title: String(data.title || `День ${currentDay}`),
-        type: data.type as ProgramDayType,
-        exercises: parseExercises(data.exercises),
-      });
+      setDayContent({ day_number: Number(data.day_number), title: String(data.title || `День ${currentDay}`), type: data.type as ProgramDayType, exercises: parseExercises(data.exercises) });
     } catch (error) {
       console.error('Error loading program day content:', error);
-
       if (requestId === contentRequestId.current) {
         setDayContent(null);
         setContentError('Контент этого дня пока недоступен');
       }
     } finally {
-      if (requestId === contentRequestId.current) {
-        setContentLoading(false);
-      }
+      if (requestId === contentRequestId.current) setContentLoading(false);
     }
   };
 
   const handleCompleteDay = async () => {
-    if (
-      !selectedProgram
-      || !dayContent
-      || contentLoading
-      || contentError
-      || isCompleting
-    ) return;
-
+    if (!selectedProgram || !dayContent || contentLoading || contentError || isCompleting) return;
     setIsCompleting(true);
     setCompletionError(null);
-
     try {
-      const result = selectedProgram.programId
-        ? await onStartProgram(selectedProgram.programId)
-        : await onStartNewProgram(selectedProgram.code);
-
-      if (!result.success) {
-        setCompletionError(result.error || 'Не удалось завершить день программы');
-        return;
-      }
-
-      if (result.applied === false) {
-        setCompletionAlreadySaved(true);
-        return;
-      }
-
+      const result = selectedProgram.programId ? await onStartProgram(selectedProgram.programId) : await onStartNewProgram(selectedProgram.code);
+      if (!result.success) { setCompletionError(result.error || 'Не удалось завершить день программы'); return; }
+      if (result.applied === false) { setCompletionAlreadySaved(true); return; }
       closeProgram();
     } catch (error) {
       console.error('Error completing program day:', error);
@@ -221,158 +113,25 @@ export function Programs({
 
   return (
     <>
-      <div className="space-y-5 pb-24">
-        <div className="px-1">
-          <h1 className="text-2xl font-bold mb-1">Программы</h1>
-          <p className="text-gray-400 text-sm">
-            30-дневные челленджи с видео, заданиями и прогрессом
-          </p>
-        </div>
+      <div className="overflow-x-hidden px-4 pb-32 pt-5">
+        <header className="mb-4"><p className="poster-overline mb-2">30 Day System</p><h1 className="display-heading text-[38px] leading-none text-white">PROGRAMS</h1></header>
+        <PosterTabs value={activeTab} onChange={setActiveTab} className="mb-4" options={[{ value: 'mine', label: 'MY PROGRAMS' }, { value: 'explore', label: 'EXPLORE' }]} />
 
-        <div className="space-y-4">
-          {ALL_PROGRAMS.map((template) => {
-            const userProgram = programs.find(
-              (program) => program.code === template.code
-            );
+        <HeroCard overline={featuredUserProgram?.isActive ? `Day ${featuredUserProgram.currentDay}/30` : 'Featured'} title={featuredProgram.title} subtitle={featuredProgram.description} image="/redesign/program-hero.jpg" className="mb-4 min-h-[220px]">
+          <div className="flex items-end justify-between gap-3">
+            <div className="min-w-0"><p className="text-xs leading-relaxed text-zinc-400">{featuredProgram.result}</p><button type="button" onClick={() => openProgram(featuredProgram, featuredUserProgram)} disabled={featuredProgram.code === 'running' && Boolean(featuredUserProgram?.completed)} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-full bg-accent px-4 text-xs font-extrabold uppercase text-white shadow-red-soft disabled:cursor-default disabled:opacity-60"><Play size={14} />{featuredUserProgram?.isActive ? 'Continue' : featuredUserProgram?.completed ? 'Completed' : 'Start'}</button></div>
+            <CircularProgress value={featuredUserProgram ? Math.min(100, (featuredUserProgram.currentDay / 30) * 100) : 0} label="progress" size={78} />
+          </div>
+        </HeroCard>
 
-            const progress = userProgram
-              ? Math.min(100, (userProgram.currentDay / 30) * 100)
-              : 0;
+        <section className="mb-5 space-y-3"><SectionHeader eyebrow="Today" title="Today's workout" />{activePrograms.length === 0 ? <AppCard className="p-4"><p className="font-semibold text-zinc-200">Нет активной программы</p><p className="mt-1 text-sm text-zinc-500">Выберите программу ниже и начните первый день.</p></AppCard> : activePrograms.slice(0, 2).map((program) => { const template = ALL_PROGRAMS.find((item) => item.code === program.code); if (!template) return null; return <AppCard key={program.id} className="overflow-hidden p-4"><div className="flex items-center justify-between gap-3"><div className="min-w-0"><p className="poster-overline mb-1">Day {program.currentDay}</p><h2 className="display-heading truncate text-2xl leading-none text-white">{template.title}</h2><p className="mt-1 truncate text-xs text-zinc-500">{template.duration}</p></div><button type="button" onClick={() => openProgram(template, program)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-white shadow-red-soft" aria-label="Открыть программу"><ChevronRight size={20} /></button></div><ProgressBar value={Math.min(100, (program.currentDay / 30) * 100)} className="mt-4 h-2" /></AppCard>; })}</section>
 
-            const isActive = Boolean(userProgram?.isActive);
-            const isCompletedRunning = template.code === 'running'
-              && Boolean(userProgram?.completed);
-            const currentDay = userProgram?.currentDay || 0;
+        <section className="mb-5 space-y-3"><SectionHeader eyebrow="Plan" title="Program overview" /><div className="grid grid-cols-4 gap-2">{['Base', 'Build', 'Push', 'Finish'].map((label, index) => <div key={label} className="rounded-[14px] border border-white/10 bg-white/[0.04] p-3 text-center"><p className="display-heading text-xl leading-none text-white">{index + 1}</p><p className="mt-1 truncate text-[9px] font-bold uppercase text-zinc-500">{label}</p></div>)}</div></section>
 
-            return (
-              <div
-                key={template.code}
-                className="relative overflow-hidden rounded-2xl bg-surface border border-white/5"
-              >
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${template.accent}`}
-                />
-
-                <div className="relative p-5">
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-black/20 border border-white/10 flex items-center justify-center shrink-0">
-                      <span className="text-3xl">{template.icon}</span>
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="text-xl font-bold leading-tight">
-                            {template.title}
-                          </h3>
-
-                          <p className="text-gray-300 text-sm mt-1 leading-relaxed">
-                            {template.description}
-                          </p>
-                        </div>
-
-                        <ChevronRight
-                          size={20}
-                          className="text-gray-500 shrink-0 mt-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-gray-400 leading-relaxed mb-4">
-                    {template.longDescription}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="rounded-xl bg-black/20 border border-white/5 p-3">
-                      <p className="text-gray-500 text-xs mb-1">Сложность</p>
-                      <p className="text-white text-sm font-medium">
-                        {template.difficulty}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-black/20 border border-white/5 p-3">
-                      <p className="text-gray-500 text-xs mb-1">Время</p>
-                      <p className="text-white text-sm font-medium">
-                        {template.duration}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-black/20 border border-white/5 p-3 col-span-2">
-                      <p className="text-gray-500 text-xs mb-1">Формат</p>
-                      <p className="text-white text-sm font-medium">
-                        {template.format}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-accent/10 border border-accent/20 p-3 mb-4">
-                    <p className="text-accent text-xs font-medium mb-1">
-                      Результат через 30 дней
-                    </p>
-                    <p className="text-gray-200 text-sm">
-                      {template.result}
-                    </p>
-                  </div>
-
-                  {isActive && (
-                    <div className="mb-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-gray-400 text-xs">Прогресс</span>
-                        <span className="text-white text-xs font-medium">
-                          День {currentDay}/30
-                        </span>
-                      </div>
-
-                      <div className="h-2 bg-black/30 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-accent rounded-full transition-all duration-500"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => openProgram(template, userProgram)}
-                    disabled={isCompletedRunning}
-                    className={`w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 active:scale-95 ${
-                      isCompletedRunning
-                        ? 'bg-surface text-green-400 border border-green-400/20 cursor-default active:scale-100'
-                        : isActive
-                        ? 'bg-surface-light text-white border border-white/10'
-                        : 'bg-accent text-white'
-                    }`}
-                  >
-                    {isCompletedRunning
-                      ? 'Программа завершена'
-                      : isActive
-                        ? `Продолжить: день ${currentDay}`
-                        : 'Начать программу'}
-                    {!isCompletedRunning && <ChevronRight size={18} />}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <section className="space-y-3">{visiblePrograms.length === 0 ? <AppCard className="p-5 text-center text-sm text-zinc-500">Активных программ пока нет</AppCard> : visiblePrograms.map((template) => { const userProgram = programLookup.get(template.code); const progress = userProgram ? Math.min(100, (userProgram.currentDay / 30) * 100) : 0; const isActive = Boolean(userProgram?.isActive); const isCompletedRunning = template.code === 'running' && Boolean(userProgram?.completed); const currentDay = userProgram?.currentDay || 0; return <article key={template.code} className="cinematic-card relative overflow-hidden rounded-[18px] border border-white/10 p-4"><div className={`absolute inset-0 bg-gradient-to-br ${template.accent}`} /><div className="relative z-10"><div className="mb-4 flex items-start justify-between gap-3"><div className="min-w-0"><div className="mb-2 flex items-center gap-2"><span className="text-xl">{template.icon}</span><StatusBadge tone={isActive ? 'red' : userProgram?.completed ? 'green' : 'neutral'}>{isActive ? `День ${currentDay}` : userProgram?.completed ? 'Завершена' : template.difficulty}</StatusBadge></div><h3 className="display-heading text-[28px] leading-none text-white">{template.title}</h3><p className="mt-1 text-sm leading-relaxed text-zinc-400">{template.description}</p></div><CircularProgress value={progress} size={66} /></div><div className="mb-4 grid grid-cols-2 gap-2"><div className="rounded-xl border border-white/10 bg-black/25 p-3"><CalendarDays size={15} className="mb-2 text-accent" /><p className="text-xs font-semibold text-zinc-200">{template.duration}</p></div><div className="rounded-xl border border-white/10 bg-black/25 p-3"><Target size={15} className="mb-2 text-accent" /><p className="text-xs font-semibold text-zinc-200">{template.format}</p></div></div>{isActive && <div className="mb-4"><div className="mb-2 flex items-center justify-between"><span className="text-xs text-zinc-500">Прогресс</span><span className="text-xs font-semibold text-zinc-300">День {currentDay}/30</span></div><ProgressBar value={progress} className="h-2" /></div>}<button onClick={() => openProgram(template, userProgram)} disabled={isCompletedRunning} className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 font-semibold transition-all active:scale-95 ${isCompletedRunning ? 'cursor-default border border-green-400/20 bg-surface text-green-400 active:scale-100' : isActive ? 'border border-white/10 bg-white/[0.06] text-white' : 'bg-accent text-white shadow-red-soft'}`}>{isCompletedRunning ? 'Программа завершена' : isActive ? `Продолжить: день ${currentDay}` : 'Начать программу'}{!isCompletedRunning && <ChevronRight size={18} />}</button></div></article>; })}</section>
       </div>
 
-      {selectedProgram && (
-        <ProgramDetail
-          programCode={selectedProgram.code}
-          programTitle={selectedProgram.title}
-          currentDay={selectedProgram.currentDay}
-          dayContent={dayContent}
-          contentLoading={contentLoading}
-          contentError={contentError}
-          completionError={completionError}
-          completionAlreadySaved={completionAlreadySaved}
-          isCompleting={isCompleting}
-          onClose={closeProgram}
-          onCompleteDay={handleCompleteDay}
-        />
-      )}
+      {selectedProgram && <ProgramDetail programCode={selectedProgram.code} programTitle={selectedProgram.title} currentDay={selectedProgram.currentDay} dayContent={dayContent} contentLoading={contentLoading} contentError={contentError} completionError={completionError} completionAlreadySaved={completionAlreadySaved} isCompleting={isCompleting} onClose={closeProgram} onCompleteDay={handleCompleteDay} />}
     </>
   );
 }
