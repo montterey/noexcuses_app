@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Roboto+Condensed:wght@600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -18,9 +18,9 @@ body,
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   margin: 0;
-  background-color: #070707;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: #070707;
   color: #f5f5f5;
   color-scheme: dark;
   -webkit-font-smoothing: antialiased;
@@ -34,9 +34,24 @@ select {
   font: inherit;
 }
 
+button {
+  touch-action: manipulation;
+}
+
+input,
+textarea,
+select {
+  min-width: 0;
+}
+
 :focus-visible {
   outline: 2px solid #e12d2d;
   outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(225, 45, 45, 0.35);
+  color: #fff;
 }
 
 ::-webkit-scrollbar {
@@ -46,18 +61,21 @@ select {
 
 @layer components {
   .safe-area-top {
-    padding-top: env(safe-area-inset-top);
+    padding-top: max(16px, env(safe-area-inset-top));
   }
 
   .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom);
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
   }
 
   .app-shell {
     min-height: 100dvh;
-    background: #070707;
-    color: #f5f5f5;
     overflow-x: hidden;
+    color: #f5f5f5;
+    background:
+      radial-gradient(circle at 100% -10%, rgba(225, 45, 45, 0.12), transparent 30%),
+      radial-gradient(circle at -20% 45%, rgba(127, 29, 29, 0.08), transparent 36%),
+      #070707;
   }
 
   .page-container {
@@ -65,19 +83,141 @@ select {
     max-width: 430px;
     min-height: 100dvh;
     margin-inline: auto;
-    padding-bottom: calc(72px + env(safe-area-inset-bottom));
-    background: #070707;
+    padding-bottom: calc(96px + env(safe-area-inset-bottom));
     overflow-x: hidden;
+    background: transparent;
   }
 
-  .display-heading {
-    font-family: 'Arial Narrow', 'Inter', system-ui, sans-serif;
+  .page-container > div:not(.safe-area-top) {
+    padding-top: max(20px, env(safe-area-inset-top));
+  }
+
+  .display-heading,
+  .page-container h1,
+  .page-container h2 {
+    font-family: 'Roboto Condensed', 'Arial Narrow', 'Inter', system-ui, sans-serif;
     font-weight: 800;
-    letter-spacing: 0;
+    letter-spacing: -0.015em;
+  }
+
+  .page-container h1 {
+    color: #f5f5f5;
   }
 
   .red-glow {
     box-shadow: 0 0 28px rgba(225, 45, 45, 0.16);
+  }
+
+  .page-container .bg-surface {
+    background-color: rgba(18, 18, 20, 0.96);
+  }
+
+  .page-container .bg-surface-light {
+    background-color: rgba(24, 24, 27, 0.98);
+  }
+
+  .page-container .rounded-2xl,
+  .page-container .rounded-3xl {
+    border-radius: 14px;
+  }
+
+  .page-container .rounded-xl {
+    border-radius: 12px;
+  }
+
+  .page-container .text-gray-300 {
+    color: #d4d4d8;
+  }
+
+  .page-container .text-gray-400 {
+    color: #a1a1aa;
+  }
+
+  .page-container .text-gray-500 {
+    color: #71717a;
+  }
+
+  .page-container input,
+  .page-container textarea,
+  .page-container select {
+    border-color: rgba(255, 255, 255, 0.09);
+    background-color: #121214;
+  }
+
+  .page-container input:focus,
+  .page-container textarea:focus,
+  .page-container select:focus {
+    border-color: rgba(225, 45, 45, 0.7);
+    box-shadow: 0 0 0 3px rgba(225, 45, 45, 0.08);
+  }
+
+  .page-container button.bg-accent {
+    box-shadow: 0 10px 24px rgba(225, 45, 45, 0.13);
+  }
+
+  .page-container [class*='from-orange-500'],
+  .page-container [class*='from-red-500'] {
+    --tw-gradient-from: rgba(225, 45, 45, 0.22) var(--tw-gradient-from-position) !important;
+    --tw-gradient-to: rgba(225, 45, 45, 0) var(--tw-gradient-to-position) !important;
+  }
+
+  .page-container [class*='to-orange-500'],
+  .page-container [class*='to-red-500'] {
+    --tw-gradient-to: rgba(127, 29, 29, 0.1) var(--tw-gradient-to-position) !important;
+  }
+
+  .page-container [class*='bg-orange-500'] {
+    background-color: rgba(225, 45, 45, 0.12) !important;
+  }
+
+  .page-container [class*='text-orange-400'] {
+    color: #f87171 !important;
+  }
+
+  button[aria-label='Добавить цель'],
+  .page-container button.fixed.bottom-20 {
+    bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .page-container > .safe-area-top {
+    padding-bottom: calc(144px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 359px) {
+  .page-container {
+    padding-bottom: calc(102px + env(safe-area-inset-bottom));
+  }
+
+  .page-container > .safe-area-top .space-y-2\.5 .grid.grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-container > .safe-area-top .space-y-2\.5 .grid.grid-cols-3 > button:first-child {
+    grid-column: 1 / -1;
+    min-height: 42px;
+    font-size: 12px;
+  }
+
+  .page-container > .safe-area-top .space-y-2\.5 .grid.grid-cols-3 > button:not(:first-child) {
+    min-height: 40px;
+    font-size: 10px;
+  }
+
+  .page-container .grid.grid-cols-2 {
+    gap: 10px;
+  }
+}
+
+@media (min-width: 360px) {
+  .page-container > .safe-area-top .space-y-2\.5 .grid.grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-container > .safe-area-top .space-y-2\.5 .grid.grid-cols-3 > button:first-child {
+    grid-column: 1 / -1;
+    min-height: 42px;
+    font-size: 12px;
   }
 }
 
