@@ -44,6 +44,12 @@ test('shared primitives cover the redesigned screens', async () => {
 
   for (const primitive of [
     'PageHeader',
+    'BrandedHeader',
+    'HeroCard',
+    'CircularProgress',
+    'PosterTabs',
+    'MetricCard',
+    'ActionTile',
     'AppCard',
     'SectionHeader',
     'StatCard',
@@ -57,17 +63,49 @@ test('shared primitives cover the redesigned screens', async () => {
   }
 });
 
-test('stats profile and remaining screens use the expanded design system', async () => {
-  const [stats, profile, overrides] = await Promise.all([
+test('reference match screens use poster primitives and image slots', async () => {
+  const [dashboard, programs, competitions, stats, profile, goals, overrides] = await Promise.all([
+    read('src/components/Dashboard.tsx'),
+    read('src/components/Programs.tsx'),
+    read('src/components/Competitions.tsx'),
     read('src/components/Stats.tsx'),
     read('src/components/Profile.tsx'),
+    read('src/components/Goals.tsx'),
     read('src/redesign-overrides.css'),
   ]);
 
-  assert.ok(stats.includes('PageHeader'));
+  assert.ok(dashboard.includes('/redesign/dashboard-xp.jpg'));
+  assert.ok(dashboard.includes('/redesign/focus-card.jpg'));
+  assert.ok(dashboard.includes('CircularProgress'));
+  assert.ok(dashboard.includes('ActionTile'));
+  assert.ok(programs.includes('MY PROGRAMS'));
+  assert.ok(programs.includes('EXPLORE'));
+  assert.ok(programs.includes('/redesign/program-hero.jpg'));
+  assert.ok(competitions.includes('CHALLENGES'));
+  assert.ok(competitions.includes('RANKINGS'));
+  assert.ok(competitions.includes('INVITATIONS'));
+  assert.ok(competitions.includes('/redesign/challenge-featured.jpg'));
+  assert.ok(competitions.includes('metricForCategory(form.category)'));
+  assert.ok(stats.includes('BrandedHeader'));
+  assert.ok(stats.includes('HeroCard'));
   assert.ok(stats.includes('StatCard'));
-  assert.ok(profile.includes('SegmentedControl'));
+  assert.ok(profile.includes('PosterTabs'));
   assert.ok(profile.includes('ProgressBar'));
+  assert.ok(goals.includes('PosterTabs'));
+  assert.ok(overrides.includes('article.bg-surface'));
+  assert.ok(overrides.includes('grid.grid-cols-3.gap-2.mt-3'));
+});
+
+test('cinematic shell keeps mobile overflow guarded', async () => {
+  const [css, overrides] = await Promise.all([
+    read('src/index.css'),
+    read('src/redesign-overrides.css'),
+  ]);
+
+  assert.ok(css.includes('repeating-linear-gradient'));
+  assert.ok(css.includes('cinematic-card'));
+  assert.ok(css.includes('athletic-panel'));
+  assert.ok(css.includes('overflow-x: hidden'));
   assert.ok(overrides.includes('article.bg-surface'));
   assert.ok(overrides.includes('grid.grid-cols-3.gap-2.mt-3'));
   assert.ok(overrides.includes('grid-column: 1 / -1'));
