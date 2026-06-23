@@ -1,6 +1,26 @@
 import { useState } from 'react';
-import { Flame, Zap, Clock, CheckCircle2, Plus, X, Check, Ban, Snowflake } from 'lucide-react';
-import { User, Goal, GoalFrequency } from '../types';
+import {
+  Ban,
+  Check,
+  CheckCircle2,
+  Clock,
+  Flame,
+  Plus,
+  ShieldCheck,
+  Snowflake,
+  Target,
+  X,
+  Zap,
+} from 'lucide-react';
+import { Goal, GoalFrequency, User } from '../types';
+import {
+  AppCard,
+  PrimaryButton,
+  ProgressBar,
+  SectionHeader,
+  StatCard,
+  StatusBadge,
+} from './ui/Primitives';
 
 type AddGoalResult = {
   success: boolean;
@@ -14,25 +34,40 @@ interface DashboardProps {
   onGoalSkip: (goalId: string) => void;
   onGoalFreeze: (goalId: string) => void;
   onGoalPostpone: (goalId: string, time: string) => Promise<boolean>;
-  onAddGoal: (goal: { title: string; type: GoalFrequency; time?: string; why?: string }) => Promise<AddGoalResult>;
+  onAddGoal: (goal: {
+    title: string;
+    type: GoalFrequency;
+    time?: string;
+    why?: string;
+  }) => Promise<AddGoalResult>;
 }
 
 function getRequiredXp(level: number): number {
   return 100 + level * 50;
 }
 
-function getStatusLabel(goal: Goal) {
-  if (goal.displayStatus === 'done') return 'Выполнено сегодня';
-  if (goal.displayStatus === 'skipped') return 'Пропущено сегодня';
-  if (goal.displayStatus === 'frozen') return 'Заморожено сегодня';
-  return 'Сегодня';
+function getStatus(goal: Goal): {
+  label: string;
+  tone: 'neutral' | 'red' | 'cyan' | 'green' | 'amber';
+} {
+  if (goal.displayStatus === 'done') return { label: 'Выполнено сегодня', tone: 'green' };
+  if (goal.displayStatus === 'skipped') return { label: 'Пропущено сегодня', tone: 'amber' };
+  if (goal.displayStatus === 'frozen') return { label: 'Заморожено сегодня', tone: 'cyan' };
+  return { label: 'Сегодня', tone: 'neutral' };
 }
 
 const getCreateErrorMessage = (message?: string) => (
   message ? `Не удалось создать цель: ${message}` : 'Не удалось создать цель'
 );
 
-export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, onAddGoal }: DashboardProps) {
+export function Dashboard({
+  user,
+  goals,
+  onGoalDone,
+  onGoalSkip,
+  onGoalFreeze,
+  onAddGoal,
+}: DashboardProps) {
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
@@ -43,13 +78,20 @@ export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, o
     why: '',
   });
 
-  const dailyGoals = goals.filter((g) => g.frequency === 'daily');
+  const dailyGoals = goals.filter((goal) => goal.frequency === 'daily');
   const todayGoals = dailyGoals.slice(0, 5);
-  const completedToday = dailyGoals.filter((g) => g.completedToday).length;
-  const completionPercent = dailyGoals.length > 0 ? Math.round((completedToday / dailyGoals.length) * 100) : 0;
+  const completedToday = dailyGoals.filter((goal) => goal.completedToday).length;
+  const completionPercent = dailyGoals.length > 0
+    ? Math.round((completedToday / dailyGoals.length) * 100)
+    : 0;
+  const requiredXp = getRequiredXp(user.level);
+  const currentLevelXp = user.xp % requiredXp;
+  const xpPercent = (currentLevelXp / requiredXp) * 100;
 
-  const currentLevelXp = user.xp % getRequiredXp(user.level);
-  const xpPercent = (currentLevelXp / getRequiredXp(user.level)) * 100;
+  const openModal = () => {
+    setCreateError('');
+    setShowModal(true);
+  };
 
   const handleSubmit = async () => {
     if (!formData.title.trim() || creating) return;
@@ -81,209 +123,200 @@ export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, o
   };
 
   return (
-    <div className="p-4 space-y-5 overflow-x-hidden">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-accent to-accent-600 flex items-center justify-center text-lg font-bold">
-            {user.firstName[0]}
+    <div className="safe-area-top overflow-x-hidden px-4 pb-28 pt-4">
+      <header className="mb-6 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-red-soft" />
+            <p className="text-[10px] font-extrabold uppercase text-accent">NoExcuses</p>
           </div>
-          <div>
-            <p className="text-sm text-gray-400">С возвращением,</p>
-            <h1 className="text-lg font-semibold">{user.firstName}</h1>
-          </div>
+          <h1 className="display-heading truncate text-xl text-zinc-100">
+            {user.firstName}, держи темп
+          </h1>
         </div>
-        <div className="flex items-center gap-1 px-3 py-1.5 bg-surface-light rounded-full">
-          <Zap size={16} className="text-accent" />
-          <span className="text-sm font-medium">{user.xp} XP</span>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-surface rounded-2xl p-4 border border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
-              <Flame size={24} className="text-white" />
-            </div>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-accent/25 bg-accent/10 font-bold text-red-100">
+          {user.firstName[0]}
+        </div>
+      </header>
+
+      <section className="mb-6 space-y-3" aria-label="Прогресс пользователя">
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            label="Уровень"
+            value={user.level}
+            detail={`${currentLevelXp}/${requiredXp} XP`}
+            icon={<ShieldCheck size={17} className="text-accent" />}
+          />
+          <StatCard
+            label="Всего XP"
+            value={user.xp.toLocaleString('ru-RU')}
+            detail={`+${user.xpThisWeek || 0} за неделю`}
+            icon={<Zap size={17} className="text-accent" />}
+            tone="neutral"
+          />
+        </div>
+
+        <AppCard className="p-4">
+          <div className="mb-2 flex items-center justify-between gap-3">
             <div>
-              <p className="text-2xl font-bold">{user.streak}</p>
-              <p className="text-xs text-gray-400">дней подряд</p>
+              <p className="text-[10px] font-bold uppercase text-zinc-500">До следующего уровня</p>
+              <p className="mt-1 text-xs text-zinc-400">Осталось {requiredXp - currentLevelXp} XP</p>
             </div>
+            <span className="display-heading text-lg text-red-200">{Math.round(xpPercent)}%</span>
           </div>
+          <ProgressBar value={xpPercent} />
+        </AppCard>
+
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard
+            label="Серия"
+            value={user.streak}
+            detail="дней дисциплины"
+            icon={<Flame size={17} className="text-accent" />}
+          />
+          <StatCard
+            label="Сегодня"
+            value={`${completionPercent}%`}
+            detail={`${completedToday} из ${dailyGoals.length} целей`}
+            icon={<Target size={17} className="text-zinc-400" />}
+            tone="neutral"
+          />
         </div>
 
-        <div className="bg-surface rounded-2xl p-4 border border-white/5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent to-accent-700 flex items-center justify-center">
-              <span className="text-xl font-bold">{user.level}</span>
-            </div>
+        <div className="flex items-center justify-between rounded-xl border border-cyan-400/20 bg-cyan-400/[0.06] px-3.5 py-3">
+          <div className="flex items-center gap-2.5">
+            <Snowflake size={17} className="text-cyan-300" />
             <div>
-              <p className="text-sm font-medium">Уровень</p>
-              <p className="text-xs text-gray-400">
-                {currentLevelXp}/{getRequiredXp(user.level)} XP
-              </p>
+              <p className="text-xs font-semibold text-cyan-100">Заморозки серии</p>
+              <p className="text-[10px] text-cyan-300/60">Защищают пропущенный день</p>
             </div>
           </div>
-          <div className="h-2 bg-dark-300 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-accent to-accent-400 rounded-full transition-all duration-500"
-              style={{ width: `${xpPercent}%` }}
-            />
-          </div>
+          <span className="display-heading text-xl text-cyan-200">{user.streakFreezeCount}</span>
         </div>
-      </div>
+      </section>
 
-      <div className="flex items-center justify-between px-4 py-3 bg-cyan-500/10 border border-cyan-300/20 rounded-2xl">
-        <div className="flex items-center gap-2">
-          <Snowflake size={18} className="text-cyan-200" />
-          <span className="text-sm font-medium text-cyan-50">Заморозки серии</span>
-        </div>
-        <span className="text-lg font-bold text-cyan-50">{user.streakFreezeCount}</span>
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">Цели на сегодня</h2>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400">{completionPercent}%</span>
-            <div className="w-20 h-2 bg-dark-300 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-accent rounded-full transition-all duration-500"
-                style={{ width: `${completionPercent}%` }}
-              />
-            </div>
-          </div>
-        </div>
+      <section className="mb-6 space-y-3">
+        <SectionHeader
+          eyebrow="Дисциплина"
+          title="Цели на сегодня"
+          trailing={<span className="text-xs font-semibold text-zinc-500">{completedToday}/{dailyGoals.length}</span>}
+        />
+        <ProgressBar value={completionPercent} />
 
         {todayGoals.length === 0 ? (
-          <div className="bg-surface rounded-2xl p-6 border border-white/5 text-center">
-            <p className="text-gray-400 mb-2">Нет целей на сегодня.</p>
-            <button
-              onClick={() => {
-                setCreateError('');
-                setShowModal(true);
-              }}
-              className="text-accent font-medium hover:underline"
-            >
-              Добавьте первую цель →
-            </button>
-          </div>
+          <AppCard className="p-6 text-center">
+            <Target size={28} className="mx-auto mb-3 text-zinc-700" />
+            <p className="mb-1 font-semibold text-zinc-200">Сегодня пока нет целей</p>
+            <p className="mb-4 text-xs text-zinc-500">Добавьте одно действие, которое нельзя отложить.</p>
+            <PrimaryButton onClick={openModal} className="w-full py-2.5 text-sm">
+              Добавить цель
+            </PrimaryButton>
+          </AppCard>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {todayGoals.map((goal) => {
               const canAct = !goal.displayStatus;
               const canFreeze = user.streakFreezeCount > 0 && canAct;
+              const status = getStatus(goal);
 
               return (
-                <div
-                  key={goal.id}
-                  className="w-full p-3.5 bg-surface rounded-xl border border-white/5"
-                >
+                <AppCard key={goal.id} className="p-3.5">
                   <div className="flex items-start gap-3">
                     <div
-                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 ${
+                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${
                         goal.displayStatus === 'done'
-                          ? 'bg-accent border-accent'
+                          ? 'border-green-500/30 bg-green-500/10 text-green-300'
                           : goal.displayStatus === 'skipped'
-                            ? 'bg-red-500/20 border-red-400'
+                            ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
                             : goal.displayStatus === 'frozen'
-                              ? 'bg-cyan-500/20 border-cyan-300'
-                              : 'border-gray-600'
+                              ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-300'
+                              : 'border-white/10 bg-white/[0.03] text-zinc-600'
                       }`}
                     >
-                      {goal.displayStatus === 'done' && <CheckCircle2 size={16} className="text-white" />}
-                      {goal.displayStatus === 'skipped' && <Ban size={14} className="text-red-300" />}
-                      {goal.displayStatus === 'frozen' && <Snowflake size={14} className="text-cyan-200" />}
+                      {goal.displayStatus === 'done' && <CheckCircle2 size={16} />}
+                      {goal.displayStatus === 'skipped' && <Ban size={15} />}
+                      {goal.displayStatus === 'frozen' && <Snowflake size={15} />}
+                      {!goal.displayStatus && <Target size={15} />}
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className={`font-medium leading-snug ${goal.completed ? 'text-gray-300' : ''}`}>
-                            {goal.title}
-                          </p>
-
-                          <div className="flex flex-wrap items-center gap-2 mt-2">
-                            <span className="text-[11px] px-2 py-1 rounded-full bg-surface-light text-gray-300">
-                              {getStatusLabel(goal)}
-                            </span>
-
-                            {goal.time && (
-                              <span className="text-[11px] px-2 py-1 rounded-full bg-surface-light text-gray-300 flex items-center gap-1">
-                                <Clock size={11} />
-                                {goal.time}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
+                        <p className="min-w-0 font-semibold leading-snug text-zinc-100">{goal.title}</p>
                         {goal.goalStreak > 0 && (
-                          <div className="flex items-center gap-1 px-2 py-1 bg-orange-500/10 rounded-full shrink-0">
-                            <Flame size={12} className="text-orange-400" />
-                            <span className="text-xs text-orange-400 font-medium">{goal.goalStreak}</span>
-                          </div>
+                          <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-red-300">
+                            <Flame size={12} /> {goal.goalStreak}
+                          </span>
                         )}
                       </div>
 
-                      {goal.why && (
-                        <p className="text-sm text-gray-400 mt-2 leading-relaxed">
-                          {goal.why}
-                        </p>
-                      )}
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+                        {goal.time && (
+                          <StatusBadge>
+                            <Clock size={10} className="mr-1" /> {goal.time}
+                          </StatusBadge>
+                        )}
+                      </div>
+
+                      {goal.why && <p className="mt-2 text-xs leading-relaxed text-zinc-500">{goal.why}</p>}
 
                       {canAct && (
-                        <div className="grid grid-cols-3 gap-2 mt-3">
+                        <div className="mt-3 grid grid-cols-3 gap-1.5">
                           <button
                             onClick={() => onGoalDone(goal.id)}
-                            className="min-h-9 rounded-lg bg-accent text-white text-xs font-medium flex items-center justify-center gap-1 active:scale-95 transition-all"
+                            className="flex min-h-9 items-center justify-center gap-1 rounded-lg bg-accent px-1 text-[10px] font-semibold text-white transition-colors active:bg-accent-600"
                           >
-                            <Check size={14} />
-                            Выполнить
+                            <Check size={13} /> Выполнить
                           </button>
-
                           <button
                             onClick={() => onGoalSkip(goal.id)}
-                            className="min-h-9 rounded-lg bg-surface-light text-gray-200 text-xs font-medium border border-white/10 flex items-center justify-center gap-1 active:scale-95 transition-all"
+                            className="flex min-h-9 items-center justify-center gap-1 rounded-lg border border-white/10 bg-surface-light px-1 text-[10px] font-semibold text-zinc-300"
                           >
-                            <Ban size={14} />
-                            Пропустить
+                            <Ban size={13} /> Пропустить
                           </button>
-
                           <button
                             onClick={() => onGoalFreeze(goal.id)}
                             disabled={!canFreeze}
-                            className="min-h-9 rounded-lg bg-cyan-500/10 text-cyan-200 text-xs font-medium border border-cyan-300/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1 active:scale-95 transition-all"
+                            className="flex min-h-9 items-center justify-center gap-1 rounded-lg border border-cyan-400/20 bg-cyan-400/[0.06] px-1 text-[10px] font-semibold text-cyan-300 disabled:cursor-not-allowed disabled:opacity-35"
                           >
-                            <Snowflake size={14} />
-                            Заморозить
+                            <Snowflake size={13} /> Заморозить
                           </button>
                         </div>
                       )}
                     </div>
                   </div>
-                </div>
+                </AppCard>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
+
+      <AppCard className="border-accent/20 bg-accent/[0.06] p-4">
+        <p className="mb-1 text-[10px] font-extrabold uppercase text-red-300">Правило дня</p>
+        <p className="display-heading text-lg leading-tight text-zinc-100">Не жди мотивации. Закрой первый пункт.</p>
+        <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+          Последовательность сильнее идеального настроения.
+        </p>
+      </AppCard>
 
       <button
-        onClick={() => {
-          setCreateError('');
-          setShowModal(true);
-        }}
-        className="fixed bottom-20 right-4 w-14 h-14 bg-accent rounded-full flex items-center justify-center shadow-lg shadow-accent/30 hover:bg-accent-600 transition-all active:scale-95"
+        type="button"
+        onClick={openModal}
+        aria-label="Добавить цель"
+        className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-[max(16px,calc((100vw-430px)/2+16px))] z-30 flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-white shadow-red-soft transition-colors hover:bg-accent-600 active:bg-accent-600"
       >
-        <Plus size={28} className="text-white" />
+        <Plus size={23} />
       </button>
 
       {showModal && (
         <div
-          className="fixed inset-0 bg-black/70 z-50 flex items-end justify-center px-2 overflow-x-hidden"
+          className="fixed inset-0 z-50 flex items-end justify-center overflow-x-hidden bg-black/80 px-2 backdrop-blur-sm"
           style={{ touchAction: 'pan-y', overscrollBehaviorX: 'none' }}
         >
           <div
-            className="w-full max-w-[430px] max-w-full box-border bg-dark-400 rounded-t-3xl p-4 overflow-y-auto overflow-x-hidden animate-in slide-in-from-bottom duration-300"
+            className="w-full max-w-[430px] overflow-x-hidden overflow-y-auto rounded-t-[14px] border border-b-0 border-white/[0.07] bg-[#0D0D0E] p-4"
             style={{
               maxHeight: '85dvh',
               paddingBottom: 'calc(env(safe-area-inset-bottom) + 16px)',
@@ -291,93 +324,93 @@ export function Dashboard({ user, goals, onGoalDone, onGoalSkip, onGoalFreeze, o
               overscrollBehaviorX: 'none',
             }}
           >
-            <div className="flex items-center justify-between mb-4 sticky top-0 bg-dark-400 pb-2">
-              <h2 className="text-lg font-bold">Новая цель</h2>
+            <div className="sticky top-0 z-10 mb-4 flex items-center justify-between bg-[#0D0D0E] pb-2">
+              <div>
+                <p className="text-[10px] font-bold uppercase text-accent">Новый шаг</p>
+                <h2 className="display-heading text-xl text-zinc-100">Создать цель</h2>
+              </div>
               <button
+                type="button"
                 onClick={() => setShowModal(false)}
-                className="w-9 h-9 rounded-full bg-surface flex items-center justify-center"
+                aria-label="Закрыть"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-surface text-zinc-400"
               >
-                <X size={18} className="text-gray-400" />
+                <X size={18} />
               </button>
             </div>
 
             <div className="space-y-3 overflow-x-hidden">
-              <div className="min-w-0">
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Название</label>
+              <label className="block min-w-0">
+                <span className="mb-1.5 block text-xs font-medium text-zinc-400">Название</span>
                 <input
                   type="text"
                   value={formData.title}
-                  onChange={(e) => {
+                  onChange={(event) => {
                     setCreateError('');
-                    setFormData({ ...formData, title: e.target.value });
+                    setFormData({ ...formData, title: event.target.value });
                   }}
-                  placeholder="Например, Утренняя медитация"
-                  className="w-full max-w-full box-border bg-surface border border-white/10 rounded-xl px-3.5 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent"
+                  placeholder="Например, утренняя медитация"
+                  className="w-full max-w-full rounded-lg border border-white/10 bg-surface px-3.5 py-3 text-zinc-100 placeholder:text-zinc-600 focus:border-accent focus:outline-none"
                   autoFocus
                 />
-              </div>
+              </label>
 
-              <div className="min-w-0">
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Тип</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setFormData({ ...formData, type: 'daily' })}
-                    className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all border ${
-                      formData.type === 'daily'
-                        ? 'bg-accent border-accent text-white'
-                        : 'bg-surface border-white/10 text-gray-400'
-                    }`}
-                  >
-                    Ежедневная
-                  </button>
-                  <button
-                    onClick={() => setFormData({ ...formData, type: 'once' })}
-                    className={`py-2.5 px-3 rounded-xl text-sm font-medium transition-all border ${
-                      formData.type === 'once'
-                        ? 'bg-accent border-accent text-white'
-                        : 'bg-surface border-white/10 text-gray-400'
-                    }`}
-                  >
-                    Разовая
-                  </button>
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-zinc-400">Тип</span>
+                <div className="grid grid-cols-2 gap-2 rounded-lg bg-surface p-1">
+                  {([
+                    ['daily', 'Ежедневная'],
+                    ['once', 'Разовая'],
+                  ] as Array<[GoalFrequency, string]>).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, type: value })}
+                      className={`rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
+                        formData.type === value ? 'bg-accent text-white' : 'text-zinc-500'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className="min-w-0">
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Время</label>
+              <label className="block min-w-0">
+                <span className="mb-1.5 block text-xs font-medium text-zinc-400">Время</span>
                 <input
                   type="time"
                   value={formData.time}
-                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                  className="w-full max-w-full box-border bg-surface border border-white/10 rounded-xl px-3.5 py-3 text-white focus:outline-none focus:border-accent"
+                  onChange={(event) => setFormData({ ...formData, time: event.target.value })}
+                  className="w-full max-w-full rounded-lg border border-white/10 bg-surface px-3.5 py-3 text-zinc-100 focus:border-accent focus:outline-none"
                 />
-              </div>
+              </label>
 
-              <div className="min-w-0">
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">Зачем?</label>
+              <label className="block min-w-0">
+                <span className="mb-1.5 block text-xs font-medium text-zinc-400">Зачем?</span>
                 <textarea
                   value={formData.why}
-                  onChange={(e) => setFormData({ ...formData, why: e.target.value })}
-                  placeholder="Ваша мотивация..."
+                  onChange={(event) => setFormData({ ...formData, why: event.target.value })}
+                  placeholder="Ваша мотивация"
                   rows={2}
-                  className="w-full max-w-full box-border bg-surface border border-white/10 rounded-xl px-3.5 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-accent resize-none"
+                  className="w-full max-w-full resize-none rounded-lg border border-white/10 bg-surface px-3.5 py-3 text-zinc-100 placeholder:text-zinc-600 focus:border-accent focus:outline-none"
                 />
-              </div>
+              </label>
 
               {createError && (
-                <p className="text-sm text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
+                <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                   {createError}
                 </p>
               )}
 
-              <button
+              <PrimaryButton
                 onClick={handleSubmit}
                 disabled={!formData.title.trim() || creating}
-                className="w-full max-w-full box-border py-3.5 bg-accent rounded-xl font-semibold text-white hover:bg-accent-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex w-full items-center justify-center gap-2"
               >
                 <Check size={18} />
-                {creating ? 'Создаем...' : 'Создать цель'}
-              </button>
+                {creating ? 'Создаём...' : 'Создать цель'}
+              </PrimaryButton>
             </div>
           </div>
         </div>

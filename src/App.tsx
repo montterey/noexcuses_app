@@ -175,10 +175,10 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-dark">
-      <div className="max-w-[430px] mx-auto min-h-screen pb-16">
+    <div className="app-shell">
+      <main className="page-container">
         {renderScreen()}
-      </div>
+      </main>
 
       <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
     </div>

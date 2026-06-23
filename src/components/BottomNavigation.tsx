@@ -16,21 +16,32 @@ const tabs = [
 
 export function BottomNavigation({ activeTab, onTabChange }: BottomNavigationProps) {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-surface border-t border-white/5 safe-area-bottom">
-      <div className="max-w-[430px] mx-auto flex items-center h-16">
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.07] bg-[#0B0B0C]/95 backdrop-blur-xl">
+      <div
+        className="mx-auto flex min-h-[72px] max-w-[430px] items-stretch px-1 pt-1"
+        style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+      >
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
+              type="button"
               onClick={() => onTabChange(tab.id)}
-              className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 px-0.5 py-2 transition-all duration-200 ${
-                isActive ? 'text-accent' : 'text-gray-500 hover:text-gray-400'
+              className={`relative flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-0.5 py-2 transition-colors duration-200 ${
+                isActive ? 'text-accent' : 'text-zinc-600 hover:text-zinc-400'
               }`}
             >
-              <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
-              <span className={`${tab.id === 'competitions' ? 'text-[8px]' : 'text-[9px]'} leading-[9px] font-medium ${isActive ? 'text-accent' : ''}`}>
+              {isActive && (
+                <span className="absolute inset-x-2 top-0 h-0.5 rounded-b-full bg-accent shadow-red-soft" />
+              )}
+              <Icon size={19} strokeWidth={isActive ? 2.5 : 2} />
+              <span
+                className={`${tab.id === 'competitions' ? 'text-[7px]' : 'text-[8px]'} max-w-full truncate leading-[9px] font-semibold ${
+                  isActive ? 'text-accent' : ''
+                }`}
+              >
                 {tab.label}
               </span>
             </button>
