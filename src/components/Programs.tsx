@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Target, Trophy } from 'lucide-react';
 import {
   Program,
   ProgramCode,
@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { ProgramDetail } from './ProgramDetail';
 import { supabase } from '../lib/supabase';
+import { GlowCard, ProgressRing } from './ui/Primitives';
 
 interface ProgramsProps {
   programs: Program[];
@@ -27,59 +28,59 @@ const ALL_PROGRAMS: Array<{
   duration: string;
   format: string;
   icon: string;
-  accent: string;
+  tone: 'red' | 'cyan' | 'green' | 'amber';
 }> = [
   {
     code: 'fitness',
     title: '30-дневная физподготовка',
     description: 'Ежедневные тренировки для силы и выносливости',
     longDescription:
-      'Базовая программа для тела: силовые упражнения, кардио, растяжка и восстановление. Подходит, чтобы втянуться в регулярные тренировки без сложного инвентаря.',
-    result: 'Сильнее тело, больше энергии и привычка тренироваться',
+      'Базовая программа для тела: силовые упражнения, кардио, растяжка и восстановление.',
+    result: 'Сильнее тело, больше энергии',
     difficulty: 'Средняя',
     duration: '10–25 мин/день',
     format: 'Силовые + кардио + растяжка',
     icon: '💪',
-    accent: 'from-orange-500/25 to-red-500/10',
+    tone: 'red',
   },
   {
     code: 'running',
     title: '30 дней бега',
     description: 'Мягкий вход в бег через интервалы, ходьбу и восстановление',
     longDescription:
-      'Программа для новичка: разминка, лёгкие интервалы бег/ходьба, техника, заминка и растяжка. Нагрузка растёт постепенно, чтобы не перегореть и не перегрузиться.',
-    result: 'Выносливость, уверенность в беге и регулярное кардио',
+      'Программа для новичка: разминка, лёгкие интервалы бег/ходьба, техника.',
+    result: 'Выносливость и уверенность в беге',
     difficulty: 'Лёгкая → средняя',
     duration: '15–35 мин/день',
-    format: 'Бег, ходьба, техника, восстановление',
+    format: 'Бег, ходьба, техника',
     icon: '🏃',
-    accent: 'from-red-500/25 to-orange-500/10',
+    tone: 'red',
   },
   {
     code: 'sleep',
     title: '30 дней качественного сна',
     description: 'Режим, вечерние ритуалы и спокойное засыпание',
     longDescription:
-      'Программа помогает стабилизировать режим сна: убрать телефон перед сном, добавить дыхание, растяжку, утренний свет и простые вечерние ритуалы.',
-    result: 'Лучшее засыпание, стабильный режим и больше восстановления',
+      'Программа помогает стабилизировать режим: дыхание, растяжка, утренний свет.',
+    result: 'Лучшее засыпание, стабильный режим',
     difficulty: 'Лёгкая',
     duration: '5–20 мин/день',
-    format: 'Задания + дыхание + растяжка + дневник сна',
+    format: 'Задания + дыхание + растяжка',
     icon: '😴',
-    accent: 'from-blue-500/25 to-purple-500/10',
+    tone: 'cyan',
   },
   {
     code: 'reading',
     title: '30 дней чтения',
-    description: 'Сформируй привычку читать каждый день без телефона',
+    description: 'Сформируй привычку читать каждый день',
     longDescription:
-      'Программа не просто заставляет читать. Она учит выбирать книгу, читать сфокусированно, делать заметки, пересказывать идеи и закреплять понимание.',
-    result: 'Привычка чтения, концентрация и лучшее запоминание',
+      'Программа учит выбирать книгу, читать сфокусированно, делать заметки.',
+    result: 'Привычка чтения и концентрация',
     difficulty: 'Лёгкая',
     duration: '10–25 мин/день',
-    format: 'Чтение + заметки + пересказ + фокус-сессии',
+    format: 'Чтение + заметки + пересказ',
     icon: '📚',
-    accent: 'from-green-500/25 to-emerald-500/10',
+    tone: 'green',
   },
 ];
 
@@ -221,15 +222,17 @@ export function Programs({
 
   return (
     <>
-      <div className="space-y-5 pb-24">
-        <div className="px-1">
-          <h1 className="text-2xl font-bold mb-1">Программы</h1>
-          <p className="text-gray-400 text-sm">
-            30-дневные челленджи с видео, заданиями и прогрессом
-          </p>
-        </div>
+      <div className="safe-area-top overflow-x-hidden px-4 pb-24 pt-4">
+        <header className="mb-6">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-red-soft" />
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-accent">Трансформация</p>
+          </div>
+          <h1 className="display-heading text-[1.625rem] leading-tight text-zinc-100">Программы</h1>
+          <p className="mt-1 text-xs text-zinc-600">30-дневные челленджи с прогрессом</p>
+        </header>
 
-        <div className="space-y-4">
+        <div className="mt-6 space-y-4">
           {ALL_PROGRAMS.map((template) => {
             const userProgram = programs.find(
               (program) => program.code === template.code
@@ -245,116 +248,117 @@ export function Programs({
             const currentDay = userProgram?.currentDay || 0;
 
             return (
-              <div
+              <GlowCard
                 key={template.code}
-                className="relative overflow-hidden rounded-2xl bg-surface border border-white/5"
+                tone={template.tone}
+                className={`overflow-hidden ${
+                  isActive ? 'ring-1 ring-accent/30' : ''
+                }`}
               >
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${template.accent}`}
-                />
-
-                <div className="relative p-5">
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-black/20 border border-white/10 flex items-center justify-center shrink-0">
-                      <span className="text-3xl">{template.icon}</span>
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="text-xl font-bold leading-tight">
-                            {template.title}
-                          </h3>
-
-                          <p className="text-gray-300 text-sm mt-1 leading-relaxed">
-                            {template.description}
-                          </p>
-                        </div>
-
-                        <ChevronRight
-                          size={20}
-                          className="text-gray-500 shrink-0 mt-1"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-gray-400 leading-relaxed mb-4">
-                    {template.longDescription}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div className="rounded-xl bg-black/20 border border-white/5 p-3">
-                      <p className="text-gray-500 text-xs mb-1">Сложность</p>
-                      <p className="text-white text-sm font-medium">
-                        {template.difficulty}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-black/20 border border-white/5 p-3">
-                      <p className="text-gray-500 text-xs mb-1">Время</p>
-                      <p className="text-white text-sm font-medium">
-                        {template.duration}
-                      </p>
-                    </div>
-
-                    <div className="rounded-xl bg-black/20 border border-white/5 p-3 col-span-2">
-                      <p className="text-gray-500 text-xs mb-1">Формат</p>
-                      <p className="text-white text-sm font-medium">
-                        {template.format}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-accent/10 border border-accent/20 p-3 mb-4">
-                    <p className="text-accent text-xs font-medium mb-1">
-                      Результат через 30 дней
-                    </p>
-                    <p className="text-gray-200 text-sm">
-                      {template.result}
-                    </p>
-                  </div>
-
-                  {isActive && (
-                    <div className="mb-4">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-gray-400 text-xs">Прогресс</span>
-                        <span className="text-white text-xs font-medium">
-                          День {currentDay}/30
-                        </span>
-                      </div>
-
-                      <div className="h-2 bg-black/30 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-accent rounded-full transition-all duration-500"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
+                <div className="flex items-stretch gap-4 p-4">
+                  {/* Progress Ring */}
+                  {isActive ? (
+                    <ProgressRing
+                      value={progress}
+                      size={68}
+                      strokeWidth={5}
+                      tone={template.tone}
+                    />
+                  ) : (
+                    <div className="flex h-[68px] w-[68px shrink-0 items-center justify-center rounded-xl border border-white/10 bg-surface-light text-2xl">
+                      {template.icon}
                     </div>
                   )}
 
-                  <button
-                    onClick={() => openProgram(template, userProgram)}
-                    disabled={isCompletedRunning}
-                    className={`w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 active:scale-95 ${
-                      isCompletedRunning
-                        ? 'bg-surface text-green-400 border border-green-400/20 cursor-default active:scale-100'
+                  {/* Content */}
+                  <div className="min-w-0 flex-1 py-0.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-zinc-600">
+                          {template.duration}
+                        </p>
+                        <h3 className="display-heading mt-0.5 text-lg leading-tight text-zinc-100">
+                          {template.title}
+                        </h3>
+                      </div>
+                      <ChevronRight
+                        size={18}
+                        className="mt-1 shrink-0 text-zinc-600"
+                      />
+                    </div>
+
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500 line-clamp-2">
+                      {template.description}
+                    </p>
+
+                    {/* Progress bar for active */}
+                    {isActive && (
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between text-[10px] font-semibold">
+                          <span className="text-zinc-500">День {currentDay}/30</span>
+                          <span className="text-accent">{Math.round(progress)}%</span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/[0.07]">
+                          <div
+                            className="h-full rounded-full bg-accent transition-all duration-500"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CTA */}
+                    <button
+                      onClick={() => openProgram(template, userProgram)}
+                      disabled={isCompletedRunning}
+                      className={`mt-3 w-full rounded-lg py-2.5 text-sm font-semibold transition-all active:scale-[0.98] ${
+                        isCompletedRunning
+                          ? 'border border-green-500/30 bg-green-500/10 text-green-300'
+                          : isActive
+                            ? 'border border-white/10 bg-surface-light text-zinc-200'
+                            : 'bg-accent text-white shadow-red-soft'
+                      }`}
+                    >
+                      {isCompletedRunning
+                        ? 'Завершено'
                         : isActive
-                        ? 'bg-surface-light text-white border border-white/10'
-                        : 'bg-accent text-white'
-                    }`}
-                  >
-                    {isCompletedRunning
-                      ? 'Программа завершена'
-                      : isActive
-                        ? `Продолжить: день ${currentDay}`
-                        : 'Начать программу'}
-                    {!isCompletedRunning && <ChevronRight size={18} />}
-                  </button>
+                          ? `Продолжить: день ${currentDay}`
+                          : 'Начать программу'}
+                    </button>
+                  </div>
                 </div>
-              </div>
+
+                {/* Result badge */}
+                <div className="border-t border-white/[0.06] px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Trophy size={14} className={`${
+                      template.tone === 'red' ? 'text-accent'
+                      : template.tone === 'cyan' ? 'text-cyan-400'
+                      : template.tone === 'green' ? 'text-green-500'
+                      : 'text-amber-400'
+                    }`} />
+                    <span className="text-[11px] text-zinc-400">{template.result}</span>
+                  </div>
+                </div>
+              </GlowCard>
             );
           })}
+        </div>
+
+        {/* Info card */}
+        <div className="mt-6 rounded-xl border border-white/[0.06] bg-surface p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-surface-light">
+              <Target size={15} className="text-zinc-500" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-zinc-300">Как это работает</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-zinc-600">
+                Выберите программу, выполняйте задания дня и отмечайте прогресс.
+                Программа адаптируется под ваш темп.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 

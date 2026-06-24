@@ -14,7 +14,6 @@ import {
   ChallengeCatalogItem,
   ChallengeCategory,
   ChallengeJoinMode,
-  ChallengeMetric,
   ChallengeMode,
   ChallengeScope,
   ChallengeStatus,
@@ -22,6 +21,11 @@ import {
   CreateChallengeInput,
   UserChallengeListItem,
 } from '../types';
+import {
+  GlowCard,
+  PrimaryButton,
+  SegmentedControl,
+} from './ui/Primitives';
 
 type CompetitionSection = 'catalog' | 'mine' | 'create';
 
@@ -32,11 +36,6 @@ const CATEGORY_LABELS: Record<ChallengeCategory, string> = {
   reading: 'Чтение',
   goals: 'Цели',
   programs: 'Программы',
-};
-
-const METRIC_LABELS: Record<ChallengeMetric, string> = {
-  goals_completed: 'Выполненные цели',
-  program_days_completed: 'Дни программ',
 };
 
 const MODE_LABELS: Record<ChallengeMode, string> = {
@@ -55,8 +54,8 @@ const STATUS_LABELS: Record<ChallengeStatus, string> = {
 
 const PARTICIPANT_LABELS: Record<UserChallengeListItem['participantStatus'], string> = {
   invited: 'Приглашение',
-  pending: 'Заявка на рассмотрении',
-  approved: 'Готово к старту',
+  pending: 'Заявка',
+  approved: 'Готов к старту',
   active: 'Участвует',
   rejected: 'Отклонено',
   declined: 'Отказ',
@@ -75,16 +74,17 @@ function formatDate(value: string | null) {
 }
 
 function StatusBadge({ status }: { status: ChallengeStatus }) {
-  const color = status === 'active'
-    ? 'text-green-300 bg-green-400/10 border-green-400/20'
-    : status === 'completed'
-      ? 'text-accent bg-accent/10 border-accent/20'
-      : status === 'cancelled' || status === 'expired'
-        ? 'text-gray-400 bg-white/5 border-white/10'
-        : 'text-blue-300 bg-blue-400/10 border-blue-400/20';
+  const config = {
+    active: { bg: 'bg-green-500/10', border: 'border-green-500/25', text: 'text-green-300' },
+    completed: { bg: 'bg-accent/10', border: 'border-accent/25', text: 'text-red-300' },
+    cancelled: { bg: 'bg-white/5', border: 'border-white/10', text: 'text-zinc-500' },
+    expired: { bg: 'bg-white/5', border: 'border-white/10', text: 'text-zinc-500' },
+    open: { bg: 'bg-cyan-400/10', border: 'border-cyan-400/25', text: 'text-cyan-300' },
+    full: { bg: 'bg-amber-400/10', border: 'border-amber-400/25', text: 'text-amber-300' },
+  }[status];
 
   return (
-    <span className={`px-2 py-1 rounded-md border text-[11px] font-medium ${color}`}>
+    <span className={`px-2 py-1 rounded-md border text-[10px] font-semibold ${config.bg} ${config.border} ${config.text}`}>
       {STATUS_LABELS[status]}
     </span>
   );
@@ -94,7 +94,7 @@ function LoadingBlocks() {
   return (
     <div className="space-y-3" aria-label="Загрузка соревнований">
       {[1, 2, 3].map((item) => (
-        <div key={item} className="h-40 rounded-lg bg-surface animate-pulse border border-white/5" />
+        <div key={item} className="h-36 rounded-xl bg-surface animate-pulse border border-white/5" />
       ))}
     </div>
   );
@@ -103,9 +103,9 @@ function LoadingBlocks() {
 function EmptyState({ title, text }: { title: string; text: string }) {
   return (
     <div className="py-14 text-center">
-      <Trophy size={36} className="mx-auto mb-3 text-gray-600" />
-      <p className="font-semibold mb-1">{title}</p>
-      <p className="text-sm text-gray-500 max-w-[280px] mx-auto">{text}</p>
+      <Trophy size={36} className="mx-auto mb-3 text-zinc-700" />
+      <p className="font-semibold text-zinc-300">{title}</p>
+      <p className="mt-1.5 text-sm text-zinc-600 max-w-[280px] mx-auto">{text}</p>
     </div>
   );
 }
@@ -124,54 +124,55 @@ function PublicChallengeCard({
     : challenge.creatorFirstName;
 
   return (
-    <article className="rounded-lg bg-surface border border-white/5 p-4">
-      <div className="flex items-start justify-between gap-3 mb-2">
+    <GlowCard className="p-4" tone="red">
+      <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
-          <p className="text-xs text-accent font-medium mb-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-accent">
             {CATEGORY_LABELS[challenge.category]}
           </p>
-          <h3 className="font-bold text-lg leading-tight">{challenge.title}</h3>
+          <h3 className="display-heading mt-0.5 text-lg leading-tight text-zinc-100">
+            {challenge.title}
+          </h3>
         </div>
         <StatusBadge status={challenge.challengeStatus} />
       </div>
 
       {challenge.description && (
-        <p className="text-sm text-gray-400 leading-relaxed mb-3 line-clamp-3">
+        <p className="text-[11px] text-zinc-500 leading-relaxed mb-3 line-clamp-2">
           {challenge.description}
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-gray-400 mb-3">
-        <span className="flex items-center gap-1.5">
-          <Trophy size={14} className="text-gray-500" />
+      <div className="flex flex-wrap gap-2 text-[10px] text-zinc-500 mb-4">
+        <span className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1">
+          <Trophy size={11} className="text-zinc-600" />
           {MODE_LABELS[challenge.mode]}
         </span>
-        <span className="flex items-center gap-1.5">
-          <Clock3 size={14} className="text-gray-500" />
+        <span className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1">
+          <Clock3 size={11} className="text-zinc-600" />
           {challenge.durationDays} дн.
         </span>
-        <span className="flex items-center gap-1.5">
-          <Users size={14} className="text-gray-500" />
+        <span className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1">
+          <Users size={11} className="text-zinc-600" />
           {challenge.participantCount}/{challenge.maxParticipants}
-        </span>
-        <span className="flex items-center gap-1.5 min-w-0">
-          <UserRound size={14} className="text-gray-500 shrink-0" />
-          <span className="truncate">{creator}</span>
         </span>
       </div>
 
-      <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/5">
-        <span className="text-xs text-gray-500">{METRIC_LABELS[challenge.metricType]}</span>
+      <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
+        <div className="flex items-center gap-1.5 text-[10px] text-zinc-600">
+          <UserRound size={12} />
+          <span className="truncate">{creator}</span>
+        </div>
         <button
           type="button"
           onClick={onJoin}
           disabled={busy || challenge.availablePlaces <= 0}
-          className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50 active:scale-95 transition-all"
+          className="px-4 py-2 rounded-lg bg-accent text-white text-xs font-semibold disabled:opacity-50 active:scale-95 transition-all shadow-red-soft"
         >
-          {busy ? 'Вступаем...' : 'Присоединиться'}
+          {busy ? 'Вступаем...' : 'Вступить'}
         </button>
       </div>
-    </article>
+    </GlowCard>
   );
 }
 
@@ -196,30 +197,42 @@ function MyChallengeCard({
     : formatDate(challenge.startsAt);
 
   return (
-    <article className="rounded-lg bg-surface border border-white/5 p-4">
+    <GlowCard
+      className="p-4"
+      tone={challenge.challengeStatus === 'active' ? 'green' : challenge.challengeStatus === 'completed' ? 'red' : 'red'}
+    >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0">
-          <p className="text-xs text-accent font-medium mb-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.06em] text-accent">
             {CATEGORY_LABELS[challenge.category]}
           </p>
-          <h3 className="font-bold text-lg leading-tight">{challenge.title}</h3>
+          <h3 className="display-heading mt-0.5 text-lg leading-tight text-zinc-100">
+            {challenge.title}
+          </h3>
         </div>
         <StatusBadge status={challenge.challengeStatus} />
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 mb-3">
-        <span>{MODE_LABELS[challenge.mode]}</span>
-        <span>{METRIC_LABELS[challenge.metricType]}</span>
-        <span>Прогресс: {challenge.progress}</span>
-        {date && <span>{date}</span>}
+      <div className="flex flex-wrap gap-2 text-[10px] mb-3">
+        <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-zinc-400">
+          {MODE_LABELS[challenge.mode]}
+        </span>
+        <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-zinc-400">
+          Прогресс: {challenge.progress}
+        </span>
+        {date && (
+          <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-zinc-500">
+            {date}
+          </span>
+        )}
       </div>
 
-      <p className="text-xs text-gray-500 mb-3">
-        Статус участия: {PARTICIPANT_LABELS[challenge.participantStatus]}
+      <p className="text-[10px] text-zinc-600 mb-3">
+        Участие: {PARTICIPANT_LABELS[challenge.participantStatus]}
       </p>
 
       {challenge.result !== 'pending' && (
-        <p className="text-sm text-accent mb-3">
+        <p className="text-sm font-semibold text-accent mb-3">
           {challenge.result === 'winner'
             ? 'Победа'
             : challenge.result === 'draw'
@@ -229,22 +242,22 @@ function MyChallengeCard({
       )}
 
       {isInvitation && (
-        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/5">
+        <div className="grid grid-cols-2 gap-2 pt-3 border-t border-white/[0.06]">
           <button
             type="button"
             onClick={onAccept}
             disabled={busy}
-            className="py-2.5 rounded-lg bg-accent text-white text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-1.5"
+            className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-accent text-white text-xs font-semibold disabled:opacity-50 shadow-red-soft"
           >
-            <Check size={16} /> Принять
+            <Check size={14} /> Принять
           </button>
           <button
             type="button"
             onClick={onDecline}
             disabled={busy}
-            className="py-2.5 rounded-lg bg-surface-light text-gray-300 text-sm font-semibold disabled:opacity-50 flex items-center justify-center gap-1.5"
+            className="flex items-center justify-center gap-1.5 py-2.5 rounded-lg border border-white/10 bg-surface-light text-zinc-400 text-xs font-semibold disabled:opacity-50"
           >
-            <X size={16} /> Отклонить
+            <X size={14} /> Отклонить
           </button>
         </div>
       )}
@@ -254,12 +267,12 @@ function MyChallengeCard({
           type="button"
           onClick={onCancel}
           disabled={busy}
-          className="w-full mt-3 py-2 rounded-lg border border-red-400/20 text-red-300 text-sm disabled:opacity-50"
+          className="w-full mt-3 py-2.5 rounded-lg border border-red-400/25 text-red-300 text-xs font-semibold disabled:opacity-50"
         >
           Отменить соревнование
         </button>
       )}
-    </article>
+    </GlowCard>
   );
 }
 
@@ -349,7 +362,7 @@ export function Competitions() {
 
     const invitedUserId = form.invitedUserId.trim();
     if (invitedUserId && !isValidUuid(invitedUserId)) {
-      setValidationError('ID приглашённого пользователя должен быть корректным UUID');
+      setValidationError('ID приглашённого должен быть корректным UUID');
       return;
     }
 
@@ -376,60 +389,55 @@ export function Competitions() {
     await loadMine('active');
   };
 
-  const selectClass = 'w-full bg-surface border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white outline-none focus:border-accent';
-  const inputClass = 'w-full bg-surface border border-white/10 rounded-lg px-3 py-3 text-sm text-white placeholder:text-gray-600 outline-none focus:border-accent box-border';
+  const inputClass = 'w-full rounded-lg border border-white/10 bg-surface px-3 py-3 text-sm text-zinc-100 placeholder:text-zinc-700 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30';
+  const selectClass = 'w-full rounded-lg border border-white/10 bg-surface px-3 py-2.5 text-sm text-zinc-100 focus:border-accent focus:outline-none cursor-pointer';
 
   return (
-    <div className="px-4 pt-5 pb-24 overflow-x-hidden">
-      <header className="mb-5">
-        <h1 className="text-2xl font-bold">Соревнования</h1>
-        <p className="text-sm text-gray-400 mt-1">Соревнуйтесь в целях и программах</p>
+    <div className="safe-area-top overflow-x-hidden px-4 pb-24 pt-4">
+      <header className="mb-6">
+        <div className="mb-1.5 flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-red-soft" />
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-accent">Соревнования</p>
+        </div>
+        <h1 className="display-heading text-[1.625rem] leading-tight text-zinc-100">Каталог</h1>
+        <p className="mt-1 text-xs text-zinc-600">Соревнуйтесь в целях и программах</p>
       </header>
 
-      <div className="grid grid-cols-3 bg-surface rounded-lg p-1 mb-5">
-        {([
-          ['catalog', 'Каталог'],
-          ['mine', 'Мои'],
-          ['create', 'Создать'],
-        ] as Array<[CompetitionSection, string]>).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => {
-              setSection(id);
-              setSuccessMessage(null);
-              setValidationError(null);
-              clearActionError();
-            }}
-            className={`py-2 rounded-md text-sm font-medium transition-colors ${
-              section === id ? 'bg-accent text-white' : 'text-gray-400'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Tabs */}
+      <SegmentedControl
+        value={section}
+        onChange={setSection}
+        className="mt-5 mb-5"
+        options={[
+          { value: 'catalog', label: 'Каталог' },
+          { value: 'mine', label: 'Мои' },
+          { value: 'create', label: 'Создать' },
+        ]}
+      />
 
+      {/* Messages */}
       {actionError && (
-        <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
+        <div className="mb-4 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-300">
           {actionError}
         </div>
       )}
       {validationError && (
-        <div className="mb-4 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
+        <div className="mb-4 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-300">
           {validationError}
         </div>
       )}
       {successMessage && (
-        <div className="mb-4 rounded-lg border border-green-400/20 bg-green-400/10 p-3 text-sm text-green-300">
+        <div className="mb-4 rounded-lg border border-green-500/25 bg-green-500/10 p-3 text-sm text-green-300">
           {successMessage}
         </div>
       )}
 
+      {/* Catalog Section */}
       {section === 'catalog' && (
         <section aria-label="Каталог соревнований">
+          {/* Search */}
           <div className="relative mb-3">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600" />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
@@ -437,18 +445,38 @@ export function Competitions() {
               className={`${inputClass} pl-10`}
             />
           </div>
+
+          {/* Filters */}
           <div className="grid grid-cols-2 gap-2 mb-4">
-            <select value={category} onChange={(event) => setCategory(event.target.value as ChallengeCategory | '')} className={selectClass}>
+            <select
+              value={category}
+              onChange={(event) => setCategory(event.target.value as ChallengeCategory | '')}
+              className={selectClass}
+            >
               <option value="">Все категории</option>
-              {CATEGORY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {CATEGORY_OPTIONS.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
             </select>
-            <select value={durationDays} onChange={(event) => setDurationDays(event.target.value ? Number(event.target.value) as 1 | 3 | 7 : '')} className={selectClass}>
+            <select
+              value={durationDays}
+              onChange={(event) => setDurationDays(event.target.value ? Number(event.target.value) as 1 | 3 | 7 : '')}
+              className={selectClass}
+            >
               <option value="">Любая длительность</option>
               <option value="1">1 день</option>
               <option value="3">3 дня</option>
               <option value="7">7 дней</option>
             </select>
-            <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)} className={`${selectClass} col-span-2`}>
+          </div>
+
+          {/* Sort */}
+          <div className="mb-5">
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as typeof sort)}
+              className={`${selectClass} w-full`}
+            >
               <option value="newest">Сначала новые</option>
               <option value="popular">Популярные</option>
               <option value="starting_soon">Скоро начинаются</option>
@@ -456,10 +484,13 @@ export function Competitions() {
             </select>
           </div>
 
-          {catalogLoading ? <LoadingBlocks /> : catalogError ? (
-            <EmptyState title="Не удалось загрузить каталог" text={catalogError} />
+          {/* Results */}
+          {catalogLoading ? (
+            <LoadingBlocks />
+          ) : catalogError ? (
+            <EmptyState title="Ошибка загрузки" text={catalogError} />
           ) : publicChallenges.length === 0 ? (
-            <EmptyState title="Ничего не найдено" text="Попробуйте изменить поиск или фильтры" />
+            <EmptyState title="Ничего не найдено" text="Попробуйте изменить фильтры" />
           ) : (
             <div className="space-y-3">
               {publicChallenges.map((challenge) => (
@@ -475,31 +506,28 @@ export function Competitions() {
         </section>
       )}
 
+      {/* Mine Section */}
       {section === 'mine' && (
         <section aria-label="Мои соревнования">
-          <div className="grid grid-cols-3 gap-1 bg-surface rounded-lg p-1 mb-4">
-            {([
-              ['active', 'Активные'],
-              ['invitations', 'Приглашения'],
-              ['history', 'История'],
-            ] as Array<[Exclude<ChallengeScope, 'all'>, string]>).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setScope(id)}
-                className={`py-2 rounded-md text-[11px] font-medium ${scope === id ? 'bg-surface-light text-white' : 'text-gray-500'}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            value={scope}
+            onChange={setScope}
+            className="mb-5"
+            options={[
+              { value: 'active', label: 'Активные' },
+              { value: 'invitations', label: 'Приглашения' },
+              { value: 'history', label: 'История' },
+            ]}
+          />
 
-          {mineLoading ? <LoadingBlocks /> : mineError ? (
-            <EmptyState title="Не удалось загрузить список" text={mineError} />
+          {mineLoading ? (
+            <LoadingBlocks />
+          ) : mineError ? (
+            <EmptyState title="Ошибка загрузки" text={mineError} />
           ) : myChallenges.length === 0 ? (
             <EmptyState
               title={scope === 'invitations' ? 'Нет приглашений' : 'Список пуст'}
-              text={scope === 'history' ? 'Завершённые соревнования появятся здесь' : 'Выберите соревнование в каталоге или создайте своё'}
+              text={scope === 'history' ? 'Завершённые появятся здесь' : 'Выберите в каталоге или создайте своё'}
             />
           ) : (
             <div className="space-y-3">
@@ -518,19 +546,37 @@ export function Competitions() {
         </section>
       )}
 
+      {/* Create Section */}
       {section === 'create' && (
         <form onSubmit={handleCreate} className="space-y-4" aria-label="Создать соревнование">
           <label className="block">
-            <span className="block text-sm text-gray-300 mb-1.5">Название</span>
-            <input required minLength={3} maxLength={120} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className={inputClass} placeholder="Например, 7 дней дисциплины" />
+            <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Название</span>
+            <input
+              required
+              minLength={3}
+              maxLength={120}
+              value={form.title}
+              onChange={(event) => setForm({ ...form, title: event.target.value })}
+              className={inputClass}
+              placeholder="Например, 7 дней дисциплины"
+            />
           </label>
+
           <label className="block">
-            <span className="block text-sm text-gray-300 mb-1.5">Описание</span>
-            <textarea maxLength={1000} rows={3} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className={`${inputClass} resize-none`} placeholder="Коротко опишите правила" />
+            <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Описание</span>
+            <textarea
+              maxLength={1000}
+              rows={2}
+              value={form.description}
+              onChange={(event) => setForm({ ...form, description: event.target.value })}
+              className={`${inputClass} resize-none`}
+              placeholder="Коротко о правилах"
+            />
           </label>
+
           <div className="grid grid-cols-2 gap-3">
             <label>
-              <span className="block text-sm text-gray-300 mb-1.5">Категория</span>
+              <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Категория</span>
               <select
                 value={form.category}
                 onChange={(event) => {
@@ -543,57 +589,94 @@ export function Competitions() {
                 }}
                 className={selectClass}
               >
-                {CATEGORY_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                {CATEGORY_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
               </select>
             </label>
             <label>
-              <span className="block text-sm text-gray-300 mb-1.5">Длительность</span>
-              <select value={form.durationDays} onChange={(event) => setForm({ ...form, durationDays: Number(event.target.value) as 1 | 3 | 7 })} className={selectClass}>
-                <option value="1">1 день</option><option value="3">3 дня</option><option value="7">7 дней</option>
+              <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Длительность</span>
+              <select
+                value={form.durationDays}
+                onChange={(event) => setForm({ ...form, durationDays: Number(event.target.value) as 1 | 3 | 7 })}
+                className={selectClass}
+              >
+                <option value="1">1 день</option>
+                <option value="3">3 дня</option>
+                <option value="7">7 дней</option>
               </select>
             </label>
           </div>
+
           <label className="block">
-            <span className="block text-sm text-gray-300 mb-1.5">Что считаем</span>
+            <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Что считаем</span>
             <select
               value={form.metricType}
               disabled
               aria-readonly="true"
-              className={`${selectClass} opacity-70 cursor-not-allowed`}
+              className={`${selectClass} opacity-60 cursor-not-allowed`}
             >
               <option value="goals_completed">Выполненные цели</option>
               <option value="program_days_completed">Дни программ</option>
             </select>
           </label>
+
           <label className="block">
-            <span className="block text-sm text-gray-300 mb-1.5">Режим</span>
-            <select value={form.mode} onChange={(event) => setForm({ ...form, mode: event.target.value as ChallengeMode })} className={selectClass}>
+            <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Режим</span>
+            <select
+              value={form.mode}
+              onChange={(event) => setForm({ ...form, mode: event.target.value as ChallengeMode })}
+              className={selectClass}
+            >
               <option value="highest_score">Лучший результат</option>
               <option value="first_to_target">Первый до цели</option>
             </select>
           </label>
+
           {form.mode === 'first_to_target' && (
             <label className="block">
-              <span className="block text-sm text-gray-300 mb-1.5">Целевое значение</span>
-              <input required min="1" type="number" inputMode="numeric" value={form.targetValue} onChange={(event) => setForm({ ...form, targetValue: event.target.value })} className={inputClass} />
+              <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Целевое значение</span>
+              <input
+                required
+                min="1"
+                type="number"
+                inputMode="numeric"
+                value={form.targetValue}
+                onChange={(event) => setForm({ ...form, targetValue: event.target.value })}
+                className={inputClass}
+              />
             </label>
           )}
+
           <div className="grid grid-cols-2 gap-3">
             <label>
-              <span className="block text-sm text-gray-300 mb-1.5">Видимость</span>
-              <select value={form.visibility} onChange={(event) => setForm({ ...form, visibility: event.target.value as ChallengeVisibility })} className={selectClass}>
-                <option value="public">Публичное</option><option value="link_only">По ссылке</option><option value="private">Приватное</option>
+              <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Видимость</span>
+              <select
+                value={form.visibility}
+                onChange={(event) => setForm({ ...form, visibility: event.target.value as ChallengeVisibility })}
+                className={selectClass}
+              >
+                <option value="public">Публичное</option>
+                <option value="link_only">По ссылке</option>
+                <option value="private">Приватное</option>
               </select>
             </label>
             <label>
-              <span className="block text-sm text-gray-300 mb-1.5">Вступление</span>
-              <select value={form.joinMode} onChange={(event) => setForm({ ...form, joinMode: event.target.value as ChallengeJoinMode })} className={selectClass}>
-                <option value="instant">Сразу</option><option value="approval">По заявке</option><option value="invite_only">По приглашению</option>
+              <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Вступление</span>
+              <select
+                value={form.joinMode}
+                onChange={(event) => setForm({ ...form, joinMode: event.target.value as ChallengeJoinMode })}
+                className={selectClass}
+              >
+                <option value="instant">Сразу</option>
+                <option value="approval">По заявке</option>
+                <option value="invite_only">По приглашению</option>
               </select>
             </label>
           </div>
+
           <label className="block">
-            <span className="block text-sm text-gray-300 mb-1.5">ID приглашённого пользователя</span>
+            <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">ID приглашённого пользователя</span>
             <input
               required={form.visibility === 'private' || form.joinMode === 'invite_only'}
               value={form.invitedUserId}
@@ -602,9 +685,14 @@ export function Competitions() {
               placeholder="Необязательно для публичного"
             />
           </label>
-          <button type="submit" disabled={creating} className="w-full py-3.5 rounded-lg bg-accent text-white font-semibold disabled:opacity-50 active:scale-[0.98] transition-all">
+
+          <PrimaryButton
+            type="submit"
+            disabled={creating}
+            className="w-full"
+          >
             {creating ? 'Создаём...' : 'Создать соревнование'}
-          </button>
+          </PrimaryButton>
         </form>
       )}
     </div>
