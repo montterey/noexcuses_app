@@ -14,12 +14,31 @@ import { useGoals } from './hooks/useGoals';
 import { usePrograms } from './hooks/usePrograms';
 import { useAchievements } from './hooks/useAchievements';
 import { useStats } from './hooks/useStats';
+import { supabase } from './lib/supabase';
 import { GoalFrequency, ProgramCode } from './types';
+
+type GoalMutationResult = { success: boolean; error?: string };
+
+function getMutationError(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message?: unknown }).message || 'Неизвестная ошибка');
+  }
+  return 'Неизвестная ошибка';
+}
 
 function AppContent() {
   const { user, loading: userLoading, error, refreshUser } = useUser();
 
-  const { goals, completeGoal, skipGoal, freezeGoal, postponeGoal, addGoal } = useGoals();
+  const {
+    goals,
+    completeGoal,
+    skipGoal,
+    freezeGoal,
+    postponeGoal,
+    addGoal,
+    refreshGoals,
+  } = useGoals();
   const { programs, startOrContinueProgram, startNewProgram } = usePrograms();
 
   const { achievements, refreshAchievements } = useAchievements();
@@ -54,6 +73,56 @@ function AppContent() {
     const success = await postponeGoal(goalId, time);
     if (success) await refreshAfterGoalAction();
     return success;
+  };
+
+  const handleUpdateGoal = async (
+    goalId: string,
+    updates: { title: string; time?: string; why?: string }
+  ): Promise<GoalMutationResult> => {
+    if (!user) return { success: false, error: 'Пользователь не загружен' };
+
+    const title = updates.title.trim();
+    if (!title) return { success: false, error: 'Введите название цели' };
+
+    try {
+      const { error: updateError } = await supabase
+        .from('goals')
+        .update({
+          title,
+          time: updates.time || null,
+          why: updates.why?.trim() || null,
+        })
+        .eq('id', goalId)
+        .eq('user_id', user.id)
+        .eq('active', true);
+
+      if (updateError) throw updateError;
+      await refreshGoals();
+      return { success: true };
+    } catch (updateError) {
+      console.error('Error updating goal:', updateError);
+      return { success: false, error: getMutationError(updateError) };
+    }
+  };
+
+  const handleDeleteGoal = async (goalId: string): Promise<GoalMutationResult> => {
+    if (!user) return { success: false, error: 'Пользователь не загружен' };
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('goals')
+        .update({ active: false })
+        .eq('id', goalId)
+        .eq('user_id', user.id)
+        .eq('active', true);
+
+      if (deleteError) throw deleteError;
+      await refreshGoals();
+      return { success: true };
+    } catch (deleteError) {
+      console.error('Error deleting goal:', deleteError);
+      return { success: false, error: getMutationError(deleteError) };
+    }
   };
 
   const handleStartNewProgram = async (code: ProgramCode) => {
@@ -125,6 +194,7 @@ function AppContent() {
             onGoalFreeze={handleGoalFreeze}
             onGoalPostpone={handleGoalPostpone}
             onAddGoal={handleAddGoal}
+            onNavigate={setActiveTab}
           />
         );
 
@@ -138,6 +208,8 @@ function AppContent() {
             onGoalFreeze={handleGoalFreeze}
             onGoalPostpone={handleGoalPostpone}
             onAddGoal={handleAddGoal}
+            onGoalUpdate={handleUpdateGoal}
+            onGoalDelete={handleDeleteGoal}
           />
         );
 
@@ -169,6 +241,7 @@ function AppContent() {
             onGoalFreeze={handleGoalFreeze}
             onGoalPostpone={handleGoalPostpone}
             onAddGoal={handleAddGoal}
+            onNavigate={setActiveTab}
           />
         );
     }
