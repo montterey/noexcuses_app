@@ -91,7 +91,8 @@ test('reference match screens use poster primitives and image slots', async () =
   assert.ok(programs.includes('EXPLORE'));
   assert.ok(programs.includes('/redesign/program-hero.jpg'));
   assert.ok(competitions.includes('CHALLENGES'));
-  assert.ok(competitions.includes('RANKINGS'));
+  assert.ok(competitions.includes('MY CHALLENGES'));
+  assert.ok(!competitions.includes("label: 'RANKINGS'"));
   assert.ok(competitions.includes('INVITATIONS'));
   assert.ok(competitions.includes('/redesign/challenge-featured.jpg'));
   assert.ok(competitions.includes('metricForCategory(form.category)'));
@@ -103,6 +104,33 @@ test('reference match screens use poster primitives and image slots', async () =
   assert.ok(goals.includes('PosterTabs'));
   assert.ok(overrides.includes('article.bg-surface'));
   assert.ok(overrides.includes('grid.grid-cols-3.gap-2.mt-3'));
+});
+
+test('goal management includes edit and soft-delete without changing earned rewards', async () => {
+  const [app, goals] = await Promise.all([
+    read('src/App.tsx'),
+    read('src/components/Goals.tsx'),
+  ]);
+
+  assert.ok(app.includes('handleUpdateGoal'));
+  assert.ok(app.includes('handleDeleteGoal'));
+  assert.ok(app.includes('.update({ active: false })'));
+  assert.ok(app.includes('onGoalUpdate={handleUpdateGoal}'));
+  assert.ok(app.includes('onGoalDelete={handleDeleteGoal}'));
+  assert.ok(goals.includes('Редактировать'));
+  assert.ok(goals.includes('Удалить цель?'));
+  assert.ok(goals.includes('XP и история выполнений сохранятся'));
+  assert.ok(goals.includes('Тип цели не меняется'));
+});
+
+test('competition catalog is truthful and does not duplicate its featured challenge', async () => {
+  const competitions = await read('src/components/Competitions.tsx');
+
+  assert.ok(competitions.includes("label: 'MY CHALLENGES'"));
+  assert.ok(competitions.includes('publicChallenges.filter((challenge) => challenge.id !== featured.id)'));
+  assert.ok(competitions.includes("section === 'invitations' ? 'invitations' : scope"));
+  assert.ok(competitions.includes('await refreshAfterAction()'));
+  assert.ok(!competitions.includes('[0, 1, 2].map'));
 });
 
 test('hardening removes fake profile actions and blocks completed programs', async () => {
