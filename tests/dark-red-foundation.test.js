@@ -105,6 +105,20 @@ test('reference match screens use poster primitives and image slots', async () =
   assert.ok(overrides.includes('grid.grid-cols-3.gap-2.mt-3'));
 });
 
+test('hardening removes fake profile actions and blocks completed programs', async () => {
+  const [programs, profile] = await Promise.all([
+    read('src/components/Programs.tsx'),
+    read('src/components/Profile.tsx'),
+  ]);
+
+  assert.ok(programs.includes('if (userProgram?.completed) return;'));
+  assert.ok(programs.includes('const isCompletedProgram = Boolean(userProgram?.completed)'));
+  assert.ok(!programs.includes('isCompletedRunning'));
+  assert.ok(profile.includes('Настройки скоро появятся'));
+  assert.ok(profile.includes('Скоро'));
+  assert.ok(!profile.includes('ChevronRight'));
+});
+
 test('all cinematic image assets are committed', async () => {
   const assets = await Promise.all([
     read('public/redesign/dashboard-xp.svg'),
