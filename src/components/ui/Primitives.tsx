@@ -83,14 +83,12 @@ export function StatCard({
   detail,
   icon,
   tone = 'red',
-  className,
 }: {
   label: string;
   value: string | number;
   detail?: string;
   icon?: ReactNode;
   tone?: 'red' | 'neutral' | 'cyan' | 'green' | 'amber';
-  className?: string;
 }) {
   const toneClass = {
     red: 'border-accent/20 bg-accent/[0.06]',
@@ -101,7 +99,7 @@ export function StatCard({
   }[tone];
 
   return (
-    <div className={classes('min-w-0 rounded-xl border p-3.5', toneClass, className)}>
+    <div className={classes('min-w-0 rounded-xl border p-3.5', toneClass)}>
       <div className="mb-2 flex items-center justify-between gap-2 text-zinc-500">
         <span className="text-[10px] font-bold uppercase tracking-[0.04em]">{label}</span>
         {icon}
@@ -234,150 +232,5 @@ export function StatusBadge({
     >
       {children}
     </span>
-  );
-}
-
-export function UnderlineTabs<T extends string>({
-  value,
-  options,
-  onChange,
-  className,
-}: {
-  value: T;
-  options: Array<{ value: T; label: string }>;
-  onChange: (value: T) => void;
-  className?: string;
-}) {
-  return (
-    <div className={classes('flex border-b border-white/[0.07]', className)}>
-      {options.map((option) => {
-        const selected = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            aria-selected={selected}
-            className={classes(
-              'relative px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.06em] transition-colors',
-              selected ? 'text-accent' : 'text-zinc-600 hover:text-zinc-400'
-            )}
-          >
-            {option.label}
-            {selected && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-accent shadow-red-soft" />
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-export function ProgressRing({
-  value,
-  size = 64,
-  strokeWidth = 5,
-  tone = 'red',
-  label,
-  sublabel,
-}: {
-  value: number;
-  size?: number;
-  strokeWidth?: number;
-  tone?: 'red' | 'cyan' | 'green' | 'amber';
-  label?: string;
-  sublabel?: string;
-}) {
-  const colorClass = {
-    red: '#E12D2D',
-    cyan: '#38BDF8',
-    green: '#22C55E',
-    amber: '#F59E0B',
-  }[tone];
-  const backgroundClass = {
-    red: 'rgba(225,45,45,0.12)',
-    cyan: 'rgba(56,189,248,0.12)',
-    green: 'rgba(34,197,94,0.12)',
-    amber: 'rgba(245,158,11,0.12)',
-  }[tone];
-  const radius = (size - strokeWidth) / 2;
-  const circumference = radius * 2 * Math.PI;
-  const offset = circumference - (Math.min(100, Math.max(0, value)) / 100) * circumference;
-
-  return (
-    <div className="flex flex-col items-center justify-center">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={backgroundClass}
-            strokeWidth={strokeWidth}
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={colorClass}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            className="transition-[stroke-dashoffset] duration-500"
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="display-heading text-lg leading-none text-zinc-100">{Math.round(value)}%</span>
-        </div>
-      </div>
-      {label && (
-        <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.02em] text-zinc-500">{label}</p>
-      )}
-      {sublabel && (
-        <p className="text-[10px] text-zinc-600">{sublabel}</p>
-      )}
-    </div>
-  );
-}
-
-export function GlowCard({
-  children,
-  className,
-  tone = 'red',
-}: {
-  children: ReactNode;
-  className?: string;
-  tone?: 'red' | 'cyan' | 'green' | 'amber';
-}) {
-  const glowClass = {
-    red: 'before:via-accent/[0.07]',
-    cyan: 'before:via-cyan-400/[0.07]',
-    green: 'before:via-green-500/[0.07]',
-    amber: 'before:via-amber-400/[0.07]',
-  }[tone];
-  const borderClass = {
-    red: 'border-accent/20',
-    cyan: 'border-cyan-400/20',
-    green: 'border-green-500/20',
-    amber: 'border-amber-400/20',
-  }[tone];
-
-  return (
-    <div
-      className={classes(
-        'relative overflow-hidden rounded-xl border bg-surface',
-        'before:absolute before:inset-0 before:bg-gradient-to-br before:from-transparent before:to-transparent',
-        'before:pointer-events-none',
-        borderClass,
-        glowClass,
-        className
-      )}
-    >
-      {children}
-    </div>
   );
 }

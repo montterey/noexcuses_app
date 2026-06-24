@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Check, CheckCircle2, ChevronRight, Clock, Lock, Trophy } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import {
   Program,
   ProgramCode,
@@ -10,8 +10,6 @@ import {
 } from '../types';
 import { ProgramDetail } from './ProgramDetail';
 import { supabase } from '../lib/supabase';
-import { Flame } from 'lucide-react';
-import { ProgressRing, UnderlineTabs } from './ui/Primitives';
 
 interface ProgramsProps {
   programs: Program[];
@@ -19,112 +17,77 @@ interface ProgramsProps {
   onStartNewProgram: (code: ProgramCode) => Promise<ProgramCompletionResult>;
 }
 
-type ProgramTab = 'mine' | 'explore';
-
 const ALL_PROGRAMS: Array<{
   code: ProgramCode;
   title: string;
-  shortTitle: string;
   description: string;
+  longDescription: string;
   result: string;
   difficulty: string;
   duration: string;
   format: string;
-  weeks: Array<{ label: string; focus: string }>;
-  bgFrom: string;
-  bgTo: string;
+  icon: string;
+  accent: string;
 }> = [
   {
     code: 'fitness',
     title: '30-дневная физподготовка',
-    shortTitle: 'ФИЗПОДГОТОВКА',
-    description: 'Силовые тренировки для тела и выносливости',
-    result: 'Сильнее тело, больше энергии',
+    description: 'Ежедневные тренировки для силы и выносливости',
+    longDescription:
+      'Базовая программа для тела: силовые упражнения, кардио, растяжка и восстановление. Подходит, чтобы втянуться в регулярные тренировки без сложного инвентаря.',
+    result: 'Сильнее тело, больше энергии и привычка тренироваться',
     difficulty: 'Средняя',
     duration: '10–25 мин/день',
     format: 'Силовые + кардио + растяжка',
-    weeks: [
-      { label: 'Неделя 1', focus: 'Фундамент' },
-      { label: 'Неделя 2', focus: 'Набор темпа' },
-      { label: 'Неделя 3', focus: 'Пиковая нагрузка' },
-      { label: 'Неделя 4', focus: 'Финальный рывок' },
-    ],
-    bgFrom: 'rgba(140,15,15,0.55)',
-    bgTo: 'rgba(50,5,5,0.9)',
+    icon: '💪',
+    accent: 'from-orange-500/25 to-red-500/10',
   },
   {
     code: 'running',
     title: '30 дней бега',
-    shortTitle: 'БЕГ',
-    description: 'Мягкий вход в бег через интервалы и восстановление',
-    result: 'Выносливость и уверенность в беге',
+    description: 'Мягкий вход в бег через интервалы, ходьбу и восстановление',
+    longDescription:
+      'Программа для новичка: разминка, лёгкие интервалы бег/ходьба, техника, заминка и растяжка. Нагрузка растёт постепенно, чтобы не перегореть и не перегрузиться.',
+    result: 'Выносливость, уверенность в беге и регулярное кардио',
     difficulty: 'Лёгкая → средняя',
     duration: '15–35 мин/день',
-    format: 'Бег, ходьба, техника',
-    weeks: [
-      { label: 'Неделя 1', focus: 'Разминка' },
-      { label: 'Неделя 2', focus: 'Интервалы' },
-      { label: 'Неделя 3', focus: 'Темп' },
-      { label: 'Неделя 4', focus: 'Финиш' },
-    ],
-    bgFrom: 'rgba(100,20,10,0.55)',
-    bgTo: 'rgba(30,5,5,0.9)',
+    format: 'Бег, ходьба, техника, восстановление',
+    icon: '🏃',
+    accent: 'from-red-500/25 to-orange-500/10',
   },
   {
     code: 'sleep',
     title: '30 дней качественного сна',
-    shortTitle: 'СОН',
-    description: 'Режим, ритуалы и спокойное засыпание',
-    result: 'Лучшее засыпание, стабильный режим',
+    description: 'Режим, вечерние ритуалы и спокойное засыпание',
+    longDescription:
+      'Программа помогает стабилизировать режим сна: убрать телефон перед сном, добавить дыхание, растяжку, утренний свет и простые вечерние ритуалы.',
+    result: 'Лучшее засыпание, стабильный режим и больше восстановления',
     difficulty: 'Лёгкая',
     duration: '5–20 мин/день',
-    format: 'Дыхание + растяжка + дневник сна',
-    weeks: [
-      { label: 'Неделя 1', focus: 'Ритуалы' },
-      { label: 'Неделя 2', focus: 'Режим' },
-      { label: 'Неделя 3', focus: 'Глубина сна' },
-      { label: 'Неделя 4', focus: 'Стабильность' },
-    ],
-    bgFrom: 'rgba(10,30,70,0.55)',
-    bgTo: 'rgba(5,10,30,0.9)',
+    format: 'Задания + дыхание + растяжка + дневник сна',
+    icon: '😴',
+    accent: 'from-blue-500/25 to-purple-500/10',
   },
   {
     code: 'reading',
     title: '30 дней чтения',
-    shortTitle: 'ЧТЕНИЕ',
-    description: 'Привычка читать каждый день без телефона',
-    result: 'Концентрация и привычка к чтению',
+    description: 'Сформируй привычку читать каждый день без телефона',
+    longDescription:
+      'Программа не просто заставляет читать. Она учит выбирать книгу, читать сфокусированно, делать заметки, пересказывать идеи и закреплять понимание.',
+    result: 'Привычка чтения, концентрация и лучшее запоминание',
     difficulty: 'Лёгкая',
     duration: '10–25 мин/день',
-    format: 'Чтение + заметки + пересказ',
-    weeks: [
-      { label: 'Неделя 1', focus: 'Выбор книги' },
-      { label: 'Неделя 2', focus: 'Фокус' },
-      { label: 'Неделя 3', focus: 'Заметки' },
-      { label: 'Неделя 4', focus: 'Закрепление' },
-    ],
-    bgFrom: 'rgba(10,50,20,0.55)',
-    bgTo: 'rgba(5,20,5,0.9)',
+    format: 'Чтение + заметки + пересказ + фокус-сессии',
+    icon: '📚',
+    accent: 'from-green-500/25 to-emerald-500/10',
   },
 ];
-
-function getWeekState(
-  weekIndex: number,
-  currentDay: number
-): 'done' | 'active' | 'locked' {
-  const weekEnd = (weekIndex + 1) * 7;
-  const weekStart = weekIndex * 7 + 1;
-  if (currentDay > weekEnd) return 'done';
-  if (currentDay >= weekStart) return 'active';
-  return 'locked';
-}
 
 export function Programs({
   programs,
   onStartProgram,
   onStartNewProgram,
 }: ProgramsProps) {
-  const [tab, setTab] = useState<ProgramTab>('mine');
   const [selectedProgram, setSelectedProgram] = useState<{
     code: ProgramCode;
     title: string;
@@ -153,9 +116,14 @@ export function Programs({
 
   const parseExercises = (value: unknown): ProgramExercise[] => {
     const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-    if (!Array.isArray(parsed)) throw new Error('Invalid program exercises');
+
+    if (!Array.isArray(parsed)) {
+      throw new Error('Invalid program exercises');
+    }
+
     return parsed.filter((item): item is ProgramExercise => (
-      typeof item === 'object' && item !== null
+      typeof item === 'object'
+      && item !== null
       && typeof (item as ProgramExercise).name === 'string'
       && ['string', 'number'].includes(typeof (item as ProgramExercise).reps)
     ));
@@ -203,17 +171,26 @@ export function Programs({
       });
     } catch (error) {
       console.error('Error loading program day content:', error);
+
       if (requestId === contentRequestId.current) {
         setDayContent(null);
         setContentError('Контент этого дня пока недоступен');
       }
     } finally {
-      if (requestId === contentRequestId.current) setContentLoading(false);
+      if (requestId === contentRequestId.current) {
+        setContentLoading(false);
+      }
     }
   };
 
   const handleCompleteDay = async () => {
-    if (!selectedProgram || !dayContent || contentLoading || contentError || isCompleting) return;
+    if (
+      !selectedProgram
+      || !dayContent
+      || contentLoading
+      || contentError
+      || isCompleting
+    ) return;
 
     setIsCompleting(true);
     setCompletionError(null);
@@ -227,7 +204,12 @@ export function Programs({
         setCompletionError(result.error || 'Не удалось завершить день программы');
         return;
       }
-      if (result.applied === false) { setCompletionAlreadySaved(true); return; }
+
+      if (result.applied === false) {
+        setCompletionAlreadySaved(true);
+        return;
+      }
+
       closeProgram();
     } catch (error) {
       console.error('Error completing program day:', error);
@@ -237,269 +219,142 @@ export function Programs({
     }
   };
 
-  const activePrograms = ALL_PROGRAMS.filter((t) =>
-    programs.find((p) => p.code === t.code && p.isActive)
-  );
-  const heroTemplate = activePrograms[0] ?? null;
-  const heroUserProgram = heroTemplate
-    ? programs.find((p) => p.code === heroTemplate.code)
-    : null;
-  const heroProgress = heroUserProgram
-    ? Math.min(100, (heroUserProgram.currentDay / 30) * 100)
-    : 0;
-  const heroCurrentDay = heroUserProgram?.currentDay ?? 0;
-
   return (
     <>
-      <div className="safe-area-top overflow-x-hidden pb-24">
-        {/* ─── Header bar ─── */}
-        <header className="flex items-center justify-between gap-3 px-4 pb-4 pt-4">
-          <span className="display-heading text-xl text-zinc-100 tracking-tight">NoExcuses</span>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 rounded-lg border border-accent/20 bg-accent/10 px-2.5 py-1.5">
-              <Flame size={14} className="text-accent" />
-              <span className="text-sm font-bold text-zinc-100">{programs.length}</span>
-            </div>
-          </div>
-        </header>
-
-        {/* ─── Title ─── */}
-        <div className="px-4 pb-3">
-          <h1 className="display-heading text-[2rem] uppercase leading-none tracking-tight text-zinc-100">
-            Программы
-          </h1>
+      <div className="space-y-5 pb-24">
+        <div className="px-1">
+          <h1 className="text-2xl font-bold mb-1">Программы</h1>
+          <p className="text-gray-400 text-sm">
+            30-дневные челленджи с видео, заданиями и прогрессом
+          </p>
         </div>
 
-        {/* ─── Underline Tabs ─── */}
-        <div className="px-4">
-          <UnderlineTabs
-            value={tab}
-            onChange={setTab}
-            options={[
-              { value: 'mine', label: 'Мои программы' },
-              { value: 'explore', label: 'Обзор' },
-            ]}
-          />
-        </div>
+        <div className="space-y-4">
+          {ALL_PROGRAMS.map((template) => {
+            const userProgram = programs.find(
+              (program) => program.code === template.code
+            );
 
-        <div className="mt-4 space-y-4 px-4">
-          {/* ─── Hero active program card ─── */}
-          {tab === 'mine' && heroTemplate && heroUserProgram && (
-            <button
-              type="button"
-              onClick={() => openProgram(heroTemplate, heroUserProgram)}
-              className="relative w-full overflow-hidden rounded-xl text-left active:scale-[0.99] transition-transform"
-              style={{ minHeight: 180 }}
-            >
-              {/* Cinematic background */}
-              <div
-                className="absolute inset-0"
-                style={{
-                  background: `linear-gradient(135deg, ${heroTemplate.bgFrom} 0%, ${heroTemplate.bgTo} 100%)`,
-                }}
-              />
-              {/* Red accent glow top-right */}
-              <div
-                className="pointer-events-none absolute right-0 top-0 h-full w-1/2 opacity-40"
-                style={{
-                  background:
-                    'radial-gradient(ellipse at 80% 20%, rgba(225,45,45,0.5) 0%, transparent 60%)',
-                }}
-              />
-              {/* Content */}
-              <div className="relative z-10 flex h-full items-center justify-between gap-4 p-5">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold uppercase tracking-[0.1em] text-accent">
-                    30 дней
-                  </p>
-                  <h2 className="display-heading mt-1 text-2xl uppercase leading-tight text-zinc-100">
-                    {heroTemplate.shortTitle}
-                  </h2>
-                  <p className="mt-2 text-[11px] leading-relaxed text-zinc-400 line-clamp-2">
-                    {heroTemplate.description}
-                  </p>
-                  <p className="mt-3 text-[10px] font-bold uppercase tracking-[0.06em] text-zinc-500">
-                    {heroCurrentDay} / 30 дней
-                  </p>
-                </div>
-                <div className="shrink-0">
-                  <ProgressRing value={heroProgress} size={76} strokeWidth={6} />
-                </div>
-              </div>
-            </button>
-          )}
+            const progress = userProgram
+              ? Math.min(100, (userProgram.currentDay / 30) * 100)
+              : 0;
 
-          {/* ─── Today's workout shortcut (if active program) ─── */}
-          {tab === 'mine' && heroTemplate && heroUserProgram && (
-            <div>
-              <p className="mb-2.5 text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-600">
-                Тренировка сегодня
-              </p>
-              <button
-                type="button"
-                onClick={() => openProgram(heroTemplate, heroUserProgram)}
-                className="flex w-full items-center gap-3 overflow-hidden rounded-xl border border-white/[0.07] bg-surface p-3.5 text-left active:bg-surface-light transition-colors"
+            const isActive = Boolean(userProgram?.isActive);
+            const isCompletedRunning = template.code === 'running'
+              && Boolean(userProgram?.completed);
+            const currentDay = userProgram?.currentDay || 0;
+
+            return (
+              <div
+                key={template.code}
+                className="relative overflow-hidden rounded-2xl bg-surface border border-white/5"
               >
-                {/* Thumbnail */}
                 <div
-                  className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg"
-                  style={{
-                    background:
-                      'radial-gradient(ellipse at center, rgba(140,15,15,0.5) 0%, rgba(30,5,5,0.9) 100%)',
-                  }}
-                >
-                  <Trophy size={22} className="text-accent/70" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-zinc-100">
-                    День {heroCurrentDay} — тренировка
-                  </p>
-                  <div className="mt-1 flex items-center gap-2 text-[11px] text-zinc-600">
-                    <Clock size={11} />
-                    <span>{heroTemplate.duration}</span>
-                    <span>·</span>
-                    <span>{heroTemplate.format}</span>
-                  </div>
-                </div>
-                <div className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-bold text-white shadow-red-soft">
-                  Открыть
-                </div>
-              </button>
-            </div>
-          )}
+                  className={`absolute inset-0 bg-gradient-to-br ${template.accent}`}
+                />
 
-          {/* ─── Week overview (if active program) ─── */}
-          {tab === 'mine' && heroTemplate && heroUserProgram && (
-            <div>
-              <p className="mb-2.5 text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-600">
-                Обзор программы
-              </p>
-              <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-surface">
-                {heroTemplate.weeks.map((week, i) => {
-                  const state = getWeekState(i, heroCurrentDay);
-                  return (
-                    <div
-                      key={i}
-                      className={`flex items-center justify-between px-4 py-3.5 ${
-                        i < heroTemplate.weeks.length - 1 ? 'border-b border-white/[0.06]' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`flex h-6 w-6 items-center justify-center rounded-full border ${
-                            state === 'done'
-                              ? 'border-green-500/40 bg-green-500/15'
-                              : state === 'active'
-                                ? 'border-accent/40 bg-accent/15'
-                                : 'border-white/10 bg-white/[0.03]'
-                          }`}
-                        >
-                          {state === 'done' && <CheckCircle2 size={13} className="text-green-400" />}
-                          {state === 'active' && <div className="h-2 w-2 rounded-full bg-accent" />}
-                          {state === 'locked' && <Lock size={11} className="text-zinc-700" />}
-                        </div>
+                <div className="relative p-5">
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-14 h-14 rounded-2xl bg-black/20 border border-white/10 flex items-center justify-center shrink-0">
+                      <span className="text-3xl">{template.icon}</span>
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
                         <div>
-                          <span className="text-[11px] font-semibold text-zinc-400">{week.label}</span>
-                          <span className="ml-2 text-[11px] text-zinc-600">{week.focus}</span>
-                        </div>
-                      </div>
-                      {state === 'done' && (
-                        <Check size={14} className="text-green-400" />
-                      )}
-                      {state === 'active' && (
-                        <span className="text-[10px] font-bold text-accent">В процессе</span>
-                      )}
-                      {state === 'locked' && (
-                        <span className="text-[10px] text-zinc-700">Заблокировано</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                          <h3 className="text-xl font-bold leading-tight">
+                            {template.title}
+                          </h3>
 
-          {/* ─── Empty state for Mine tab ─── */}
-          {tab === 'mine' && activePrograms.length === 0 && (
-            <div className="py-10 text-center">
-              <Trophy size={36} className="mx-auto mb-3 text-zinc-700" />
-              <p className="font-semibold text-zinc-300">Нет активных программ</p>
-              <p className="mt-1.5 text-sm text-zinc-600">Откройте вкладку «Обзор» и начните программу</p>
-            </div>
-          )}
-
-          {/* ─── Programs list (Explore tab OR non-active mine) ─── */}
-          {(tab === 'explore' || (tab === 'mine' && activePrograms.length === 0)) && (
-            <div className="space-y-3">
-              {(tab === 'mine' ? [] : ALL_PROGRAMS).map((template) => {
-                const userProgram = programs.find((p) => p.code === template.code);
-                const progress = userProgram ? Math.min(100, (userProgram.currentDay / 30) * 100) : 0;
-                const isActive = Boolean(userProgram?.isActive);
-                const isCompletedRunning = template.code === 'running' && Boolean(userProgram?.completed);
-                const currentDay = userProgram?.currentDay || 0;
-
-                return (
-                  <div
-                    key={template.code}
-                    className="relative overflow-hidden rounded-xl border border-white/[0.07]"
-                    style={{ background: '#121214' }}
-                  >
-                    {/* Left accent stripe */}
-                    <div
-                      className="absolute left-0 top-0 h-full w-1 rounded-l-xl"
-                      style={{
-                        background: `linear-gradient(180deg, ${template.bgFrom} 0%, transparent 100%)`,
-                        opacity: 0.8,
-                      }}
-                    />
-                    <div className="flex items-center gap-3 p-4 pl-5">
-                      {isActive ? (
-                        <ProgressRing value={progress} size={56} strokeWidth={4.5} />
-                      ) : (
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-surface-light text-2xl">
-                          {template.code === 'fitness' ? '💪'
-                            : template.code === 'running' ? '🏃'
-                              : template.code === 'sleep' ? '😴'
-                                : '📚'}
-                        </div>
-                      )}
-
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-zinc-600">
-                          {template.duration}
-                        </p>
-                        <h3 className="display-heading mt-0.5 text-base uppercase leading-tight text-zinc-100">
-                          {template.shortTitle}
-                        </h3>
-                        <p className="mt-0.5 text-[10px] text-zinc-600 line-clamp-1">{template.description}</p>
-                        {isActive && (
-                          <p className="mt-1 text-[10px] font-semibold text-accent">
-                            День {currentDay}/30 · {Math.round(progress)}%
+                          <p className="text-gray-300 text-sm mt-1 leading-relaxed">
+                            {template.description}
                           </p>
-                        )}
+                        </div>
+
+                        <ChevronRight
+                          size={20}
+                          className="text-gray-500 shrink-0 mt-1"
+                        />
                       </div>
-
-                      <button
-                        onClick={() => openProgram(template, userProgram)}
-                        disabled={isCompletedRunning}
-                        className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold transition-all active:scale-95 ${
-                          isCompletedRunning
-                            ? 'border border-green-500/30 text-green-400'
-                            : isActive
-                              ? 'border border-white/10 bg-surface-light text-zinc-300'
-                              : 'bg-accent text-white shadow-red-soft'
-                        }`}
-                      >
-                        {isCompletedRunning ? 'Готово' : isActive ? 'Продолжить' : 'Начать'}
-                      </button>
-
-                      <ChevronRight size={16} className="shrink-0 text-zinc-700" />
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+
+                  <p className="text-sm text-gray-400 leading-relaxed mb-4">
+                    {template.longDescription}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div className="rounded-xl bg-black/20 border border-white/5 p-3">
+                      <p className="text-gray-500 text-xs mb-1">Сложность</p>
+                      <p className="text-white text-sm font-medium">
+                        {template.difficulty}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-black/20 border border-white/5 p-3">
+                      <p className="text-gray-500 text-xs mb-1">Время</p>
+                      <p className="text-white text-sm font-medium">
+                        {template.duration}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-black/20 border border-white/5 p-3 col-span-2">
+                      <p className="text-gray-500 text-xs mb-1">Формат</p>
+                      <p className="text-white text-sm font-medium">
+                        {template.format}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-accent/10 border border-accent/20 p-3 mb-4">
+                    <p className="text-accent text-xs font-medium mb-1">
+                      Результат через 30 дней
+                    </p>
+                    <p className="text-gray-200 text-sm">
+                      {template.result}
+                    </p>
+                  </div>
+
+                  {isActive && (
+                    <div className="mb-4">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-gray-400 text-xs">Прогресс</span>
+                        <span className="text-white text-xs font-medium">
+                          День {currentDay}/30
+                        </span>
+                      </div>
+
+                      <div className="h-2 bg-black/30 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-accent rounded-full transition-all duration-500"
+                          style={{ width: `${progress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => openProgram(template, userProgram)}
+                    disabled={isCompletedRunning}
+                    className={`w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 active:scale-95 ${
+                      isCompletedRunning
+                        ? 'bg-surface text-green-400 border border-green-400/20 cursor-default active:scale-100'
+                        : isActive
+                        ? 'bg-surface-light text-white border border-white/10'
+                        : 'bg-accent text-white'
+                    }`}
+                  >
+                    {isCompletedRunning
+                      ? 'Программа завершена'
+                      : isActive
+                        ? `Продолжить: день ${currentDay}`
+                        : 'Начать программу'}
+                    {!isCompletedRunning && <ChevronRight size={18} />}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
