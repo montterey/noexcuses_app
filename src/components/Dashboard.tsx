@@ -4,6 +4,7 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  Dumbbell,
   Flame,
   Plus,
   Snowflake,
@@ -14,19 +15,14 @@ import {
 import { Goal, GoalFrequency, User } from '../types';
 import {
   AppCard,
-  GlowCard,
   PrimaryButton,
   ProgressBar,
   ProgressRing,
   SectionHeader,
-  StatCard,
   StatusBadge,
 } from './ui/Primitives';
 
-type AddGoalResult = {
-  success: boolean;
-  error?: string;
-};
+type AddGoalResult = { success: boolean; error?: string };
 
 interface DashboardProps {
   user: User;
@@ -43,23 +39,24 @@ interface DashboardProps {
   }) => Promise<AddGoalResult>;
 }
 
-function getRequiredXp(level: number): number {
-  return 100 + level * 50;
-}
+function getRequiredXp(level: number) { return 100 + level * 50; }
 
-function getStatus(goal: Goal): {
-  label: string;
-  tone: 'neutral' | 'red' | 'cyan' | 'green' | 'amber';
-} {
+function getStatus(goal: Goal): { label: string; tone: 'neutral' | 'red' | 'cyan' | 'green' | 'amber' } {
   if (goal.displayStatus === 'done') return { label: 'Выполнено', tone: 'green' };
   if (goal.displayStatus === 'skipped') return { label: 'Пропущено', tone: 'amber' };
   if (goal.displayStatus === 'frozen') return { label: 'Заморожено', tone: 'cyan' };
   return { label: 'Сегодня', tone: 'neutral' };
 }
 
-const getCreateErrorMessage = (message?: string) => (
-  message ? `Не удалось создать цель: ${message}` : 'Не удалось создать цель'
-);
+const getCreateErrorMessage = (m?: string) =>
+  m ? `Не удалось создать цель: ${m}` : 'Не удалось создать цель';
+
+const QUICK_ACTIONS = [
+  { icon: Dumbbell, label: 'Тренировка' },
+  { icon: Target, label: 'Привычка' },
+  { icon: Check, label: 'Цель' },
+  { icon: Zap, label: 'Фокус' },
+] as const;
 
 export function Dashboard({
   user,
@@ -89,17 +86,12 @@ export function Dashboard({
   const currentLevelXp = user.xp % requiredXp;
   const xpPercent = (currentLevelXp / requiredXp) * 100;
 
-  const openModal = () => {
-    setCreateError('');
-    setShowModal(true);
-  };
+  const openModal = () => { setCreateError(''); setShowModal(true); };
 
   const handleSubmit = async () => {
     if (!formData.title.trim() || creating) return;
-
     setCreating(true);
     setCreateError('');
-
     try {
       const result = await onAddGoal({
         title: formData.title.trim(),
@@ -107,12 +99,7 @@ export function Dashboard({
         time: formData.time || undefined,
         why: formData.why.trim() || undefined,
       });
-
-      if (!result.success) {
-        setCreateError(getCreateErrorMessage(result.error));
-        return;
-      }
-
+      if (!result.success) { setCreateError(getCreateErrorMessage(result.error)); return; }
       setFormData({ title: '', type: 'daily', time: '', why: '' });
       setShowModal(false);
     } catch (error) {
@@ -124,211 +111,268 @@ export function Dashboard({
   };
 
   return (
-    <div className="safe-area-top overflow-x-hidden px-4 pb-28 pt-4">
-      {/* Header */}
-      <header className="mb-8 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-red-soft" />
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-accent">NoExcuses</p>
+    <div className="safe-area-top overflow-x-hidden pb-28">
+      {/* ─── Header bar ─── */}
+      <header className="flex items-center justify-between gap-3 px-4 pb-4 pt-4">
+        <span className="display-heading text-xl text-zinc-100 tracking-tight">NoExcuses</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 rounded-lg border border-accent/20 bg-accent/10 px-2.5 py-1.5">
+            <Flame size={14} className="text-accent" />
+            <span className="text-sm font-bold text-zinc-100">{user.streak}</span>
           </div>
-          <h1 className="display-heading truncate text-[1.625rem] leading-tight text-zinc-100">
-            {user.firstName}
-          </h1>
-          <p className="mt-0.5 text-xs text-zinc-600">Держи темп</p>
-        </div>
-
-        <div className="relative">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-accent/25 bg-accent/10 font-bold text-lg text-red-200">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full border border-accent/30 bg-gradient-to-br from-accent/30 to-accent/10 text-sm font-bold text-red-200">
             {user.firstName[0]}
           </div>
-          <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full border-2 border-[#070707] bg-accent text-[8px] font-bold text-white">
-            {user.level}
-          </span>
         </div>
       </header>
 
-      {/* Hero: Level Progress Ring */}
-      <section className="mb-6" aria-label="Прогресс уровня">
-        <GlowCard className="p-5">
-          <div className="flex items-center gap-5">
-            <ProgressRing
-              value={xpPercent}
-              size={80}
-              strokeWidth={6}
-              label="Уровень"
-              sublabel={`${currentLevelXp}/${requiredXp} XP`}
+      <div className="space-y-4 px-4">
+        {/* ─── Level + Total XP row ─── */}
+        <section className="grid grid-cols-2 gap-3" aria-label="Уровень и опыт">
+          {/* Level card */}
+          <div className="rounded-xl border border-accent/20 bg-surface p-3.5">
+            <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-600">Уровень</p>
+            <p className="display-heading mt-1 text-4xl leading-none text-accent">{user.level}</p>
+            <div className="mt-2.5">
+              <ProgressBar value={xpPercent} />
+            </div>
+            <p className="mt-1.5 text-[10px] text-zinc-600">
+              {currentLevelXp.toLocaleString('ru-RU')}&thinsp;/&thinsp;{requiredXp.toLocaleString('ru-RU')} XP
+            </p>
+          </div>
+
+          {/* Total XP card — cinematic dark photo bg */}
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.07]">
+            {/* Simulated cinematic photo background */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(ellipse at 85% 30%, rgba(225,45,45,0.22) 0%, transparent 60%),' +
+                  'radial-gradient(ellipse at 20% 80%, rgba(120,20,20,0.3) 0%, transparent 50%),' +
+                  '#0E0E10',
+              }}
             />
-            <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-zinc-600">До следующего уровня</p>
-              <p className="display-heading mt-1 text-2xl leading-tight text-zinc-100">
-                {requiredXp - currentLevelXp} <span className="text-base font-normal text-zinc-500">XP</span>
+            {/* Silhouette accent shape */}
+            <div
+              className="pointer-events-none absolute right-0 top-0 h-full w-2/3 opacity-15"
+              style={{
+                background:
+                  'linear-gradient(135deg, transparent 40%, rgba(225,45,45,0.5) 100%)',
+              }}
+            />
+            <div className="relative z-10 p-3.5">
+              <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-600">Всего XP</p>
+              <p className="display-heading mt-1 text-3xl leading-none text-zinc-100">
+                {user.xp.toLocaleString('ru-RU')}
               </p>
-              <div className="mt-3">
-                <ProgressBar value={xpPercent} />
+              <div className="mt-3 inline-block rounded-md bg-accent px-2 py-0.5">
+                <p className="text-[9px] font-extrabold uppercase tracking-widest text-white">
+                  +{user.xpThisWeek || 0} за неделю
+                </p>
               </div>
             </div>
           </div>
-        </GlowCard>
-      </section>
+        </section>
 
-      {/* Stats Grid */}
-      <section className="mb-6 grid grid-cols-3 gap-2.5" aria-label="Статистика">
-        <StatCard
-          label="Всего XP"
-          value={user.xp.toLocaleString('ru-RU')}
-          icon={<Zap size={15} className="text-accent" />}
-          className="!p-3"
-        />
-        <StatCard
-          label="Серия"
-          value={user.streak}
-          icon={<Flame size={15} className="text-accent" />}
-          className="!p-3"
-        />
-        <StatCard
-          label="Сегодня"
-          value={`${completionPercent}%`}
-          icon={<Target size={15} className="text-zinc-500" />}
-          tone="neutral"
-          className="!p-3"
-        />
-      </section>
-
-      {/* Streak Freezes */}
-      <section className="mb-7">
-        <div className="flex items-center justify-between rounded-xl border border-cyan-400/20 bg-gradient-to-r from-cyan-400/[0.08] to-transparent px-4 py-3.5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-400/25 bg-cyan-400/10">
-              <Snowflake size={16} className="text-cyan-300" />
+        {/* ─── Streak + Daily Progress row ─── */}
+        <section className="grid grid-cols-2 gap-3" aria-label="Серия и прогресс дня">
+          {/* Streak card */}
+          <div className="rounded-xl border border-white/[0.07] bg-surface p-3.5">
+            <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-600">Серия</p>
+            <div className="mt-2 flex items-end gap-1.5">
+              <Flame size={20} className="mb-0.5 shrink-0 text-accent" />
+              <p className="display-heading text-4xl leading-none text-zinc-100">{user.streak}</p>
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-cyan-100">Заморозки серии</p>
-              <p className="text-[10px] text-cyan-400/70">Защищают от пропуска</p>
-            </div>
+            <p className="mt-1 text-[10px] text-zinc-600">дней</p>
+            {user.streakFreezeCount > 0 && (
+              <div className="mt-2 flex items-center gap-1">
+                <Snowflake size={11} className="text-cyan-400" />
+                <span className="text-[10px] text-cyan-400">{user.streakFreezeCount} заморозки</span>
+              </div>
+            )}
           </div>
-          <span className="display-heading text-xl text-cyan-200 mr-1">{user.streakFreezeCount}</span>
-        </div>
-      </section>
 
-      {/* Goals Section */}
-      <section className="mb-6 space-y-3">
-        <SectionHeader
-          eyebrow="Дисциплина"
-          title="Цели на сегодня"
-          trailing={
-            <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-semibold text-zinc-500">
-              {completedToday}/{dailyGoals.length}
-            </span>
-          }
-        />
+          {/* Daily Progress card — big ring */}
+          <div className="flex flex-col items-center justify-center rounded-xl border border-white/[0.07] bg-surface p-3.5">
+            <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-600">Прогресс дня</p>
+            <ProgressRing value={completionPercent} size={72} strokeWidth={6} />
+            <p className="mt-2 text-[10px] text-zinc-600">
+              {completedToday}/{dailyGoals.length} целей
+            </p>
+          </div>
+        </section>
 
-        {todayGoals.length === 0 ? (
-          <AppCard className="p-6 text-center">
-            <Target size={32} className="mx-auto mb-3 text-zinc-700" />
-            <p className="mb-1 font-semibold text-zinc-200">Сегодня пока нет целей</p>
-            <p className="mb-4 text-xs text-zinc-600">Добавьте действие, которое нельзя отложить.</p>
-            <PrimaryButton onClick={openModal} className="w-full py-2.5 text-sm">
-              Добавить цель
-            </PrimaryButton>
-          </AppCard>
-        ) : (
-          <div className="space-y-2">
-            {todayGoals.map((goal) => {
-              const canAct = !goal.displayStatus;
-              const canFreeze = user.streakFreezeCount > 0 && canAct;
-              const status = getStatus(goal);
-
+        {/* ─── Quick Actions ─── */}
+        <section aria-label="Быстрые действия">
+          <p className="mb-2.5 text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-600">Быстрые действия</p>
+          <div className="grid grid-cols-4 gap-2">
+            {QUICK_ACTIONS.map((action, i) => {
+              const Icon = action.icon;
               return (
-                <AppCard key={goal.id} className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
-                        goal.displayStatus === 'done'
-                          ? 'border-green-500/30 bg-green-500/10 text-green-300'
-                          : goal.displayStatus === 'skipped'
-                            ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
-                            : goal.displayStatus === 'frozen'
-                              ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-300'
-                              : 'border-accent/25 bg-accent/10 text-accent'
-                      }`}
-                    >
-                      {goal.displayStatus === 'done' && <CheckCircle2 size={16} />}
-                      {goal.displayStatus === 'skipped' && <Ban size={15} />}
-                      {goal.displayStatus === 'frozen' && <Snowflake size={15} />}
-                      {!goal.displayStatus && <Target size={15} />}
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="min-w-0 font-semibold leading-snug text-zinc-100">{goal.title}</p>
-                        {goal.goalStreak > 0 && (
-                          <span className="flex shrink-0 items-center gap-1 rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-300">
-                            <Flame size={10} /> {goal.goalStreak}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                        <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
-                        {goal.time && (
-                          <StatusBadge>
-                            <Clock size={10} className="mr-1" /> {goal.time}
-                          </StatusBadge>
-                        )}
-                      </div>
-
-                      {goal.why && <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">{goal.why}</p>}
-
-                      {canAct && (
-                        <div className="mt-3 grid grid-cols-3 gap-1.5">
-                          <button
-                            onClick={() => onGoalDone(goal.id)}
-                            className="flex min-h-[38px] items-center justify-center gap-1 rounded-lg bg-accent px-2 text-[11px] font-semibold text-white transition-all active:scale-[0.97]"
-                          >
-                            <Check size={13} /> Готово
-                          </button>
-                          <button
-                            onClick={() => onGoalSkip(goal.id)}
-                            className="flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-white/10 bg-surface-light px-2 text-[11px] font-semibold text-zinc-400"
-                          >
-                            <Ban size={13} /> Пропуск
-                          </button>
-                          <button
-                            onClick={() => onGoalFreeze(goal.id)}
-                            disabled={!canFreeze}
-                            className="flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-cyan-400/25 bg-cyan-400/[0.08] px-2 text-[11px] font-semibold text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            <Snowflake size={13} /> Заморозить
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                <button
+                  key={i}
+                  type="button"
+                  onClick={i === 2 ? openModal : undefined}
+                  className="flex flex-col items-center gap-1.5 rounded-xl border border-white/[0.07] bg-surface py-3 transition-colors active:bg-surface-light"
+                >
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-accent/20 bg-accent/10">
+                    <Icon size={15} className="text-accent" />
                   </div>
-                </AppCard>
+                  <span className="text-[9px] font-semibold text-zinc-500">{action.label}</span>
+                </button>
               );
             })}
           </div>
-        )}
-      </section>
+        </section>
 
-      {/* Motivational Panel */}
-      <GlowCard className="border-accent/25 p-4">
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-accent/25 bg-accent/10">
-            <Flame size={16} className="text-accent" />
+        {/* ─── Today's Focus — cinematic photo card ─── */}
+        <section aria-label="Фокус дня">
+          <p className="mb-2.5 text-[9px] font-bold uppercase tracking-[0.1em] text-zinc-600">Фокус дня</p>
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.07]" style={{ minHeight: 120 }}>
+            {/* Cinematic background */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  'radial-gradient(ellipse at 80% 50%, rgba(80,0,0,0.6) 0%, transparent 55%),' +
+                  'linear-gradient(90deg, #0D0D0F 50%, #1A0808 100%)',
+              }}
+            />
+            {/* Athletic figure silhouette on right */}
+            <div
+              className="pointer-events-none absolute right-0 top-0 h-full w-1/2"
+              style={{
+                background:
+                  'linear-gradient(to left, rgba(140,15,15,0.18) 0%, transparent 100%)',
+              }}
+            />
+            <div className="relative z-10 flex h-full items-center justify-between gap-3 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="display-heading text-xl leading-tight text-zinc-100">
+                  Дисциплина<br />без оправданий
+                </p>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-500">
+                  Не нужна мотивация. Нужны стандарты.
+                </p>
+              </div>
+              {/* Stylised silhouette placeholder */}
+              <div
+                className="h-[88px] w-[56px] shrink-0 opacity-30"
+                style={{
+                  background:
+                    'linear-gradient(180deg, #E12D2D 0%, #7F1D1D 60%, transparent 100%)',
+                  maskImage: 'linear-gradient(to bottom, black 70%, transparent 100%)',
+                  borderRadius: '28px 28px 0 0',
+                }}
+              />
+            </div>
           </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-red-300">Правило дня</p>
-            <p className="display-heading mt-1 text-lg leading-tight text-zinc-100">
-              Не жди мотивации.
-            </p>
-            <p className="mt-1.5 text-xs leading-relaxed text-zinc-500">
-              Закрой первый пункт. Последовательность сильнее идеального настроения.
-            </p>
-          </div>
-        </div>
-      </GlowCard>
+        </section>
+
+        {/* ─── Goals Section ─── */}
+        <section className="space-y-3" aria-label="Цели на сегодня">
+          <SectionHeader
+            eyebrow="Дисциплина"
+            title="Цели на сегодня"
+            trailing={
+              <span className="rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-semibold text-zinc-500">
+                {completedToday}/{dailyGoals.length}
+              </span>
+            }
+          />
+
+          {todayGoals.length === 0 ? (
+            <AppCard className="p-6 text-center">
+              <Target size={32} className="mx-auto mb-3 text-zinc-700" />
+              <p className="mb-1 font-semibold text-zinc-200">Сегодня пока нет целей</p>
+              <p className="mb-4 text-xs text-zinc-600">Добавьте действие, которое нельзя отложить.</p>
+              <PrimaryButton onClick={openModal} className="w-full py-2.5 text-sm">
+                Добавить цель
+              </PrimaryButton>
+            </AppCard>
+          ) : (
+            <div className="space-y-2">
+              {todayGoals.map((goal) => {
+                const canAct = !goal.displayStatus;
+                const canFreeze = user.streakFreezeCount > 0 && canAct;
+                const status = getStatus(goal);
+
+                return (
+                  <AppCard key={goal.id} className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                          goal.displayStatus === 'done'
+                            ? 'border-green-500/30 bg-green-500/10 text-green-300'
+                            : goal.displayStatus === 'skipped'
+                              ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+                              : goal.displayStatus === 'frozen'
+                                ? 'border-cyan-400/30 bg-cyan-400/10 text-cyan-300'
+                                : 'border-accent/25 bg-accent/10 text-accent'
+                        }`}
+                      >
+                        {goal.displayStatus === 'done' && <CheckCircle2 size={16} />}
+                        {goal.displayStatus === 'skipped' && <Ban size={15} />}
+                        {goal.displayStatus === 'frozen' && <Snowflake size={15} />}
+                        {!goal.displayStatus && <Target size={15} />}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 font-semibold leading-snug text-zinc-100">{goal.title}</p>
+                          {goal.goalStreak > 0 && (
+                            <span className="flex shrink-0 items-center gap-1 rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-red-300">
+                              <Flame size={10} /> {goal.goalStreak}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+                          {goal.time && (
+                            <StatusBadge>
+                              <Clock size={10} className="mr-1" /> {goal.time}
+                            </StatusBadge>
+                          )}
+                        </div>
+
+                        {goal.why && (
+                          <p className="mt-2 text-[11px] leading-relaxed text-zinc-600">{goal.why}</p>
+                        )}
+
+                        {canAct && (
+                          <div className="mt-3 grid grid-cols-3 gap-1.5">
+                            <button
+                              onClick={() => onGoalDone(goal.id)}
+                              className="flex min-h-[38px] items-center justify-center gap-1 rounded-lg bg-accent px-2 text-[11px] font-semibold text-white transition-all active:scale-[0.97]"
+                            >
+                              <Check size={13} /> Готово
+                            </button>
+                            <button
+                              onClick={() => onGoalSkip(goal.id)}
+                              className="flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-white/10 bg-surface-light px-2 text-[11px] font-semibold text-zinc-400"
+                            >
+                              <Ban size={13} /> Пропуск
+                            </button>
+                            <button
+                              onClick={() => onGoalFreeze(goal.id)}
+                              disabled={!canFreeze}
+                              className="flex min-h-[38px] items-center justify-center gap-1 rounded-lg border border-cyan-400/25 bg-cyan-400/[0.08] px-2 text-[11px] font-semibold text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              <Snowflake size={13} /> Заморозить
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </AppCard>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
 
       {/* FAB */}
       <button
@@ -376,10 +420,7 @@ export function Dashboard({
                 <input
                   type="text"
                   value={formData.title}
-                  onChange={(event) => {
-                    setCreateError('');
-                    setFormData({ ...formData, title: event.target.value });
-                  }}
+                  onChange={(e) => { setCreateError(''); setFormData({ ...formData, title: e.target.value }); }}
                   placeholder="Например, утренняя медитация"
                   className="w-full rounded-lg border border-white/10 bg-surface px-3.5 py-3 text-sm text-zinc-100 placeholder:text-zinc-700 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
                   autoFocus
@@ -389,21 +430,16 @@ export function Dashboard({
               <div>
                 <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Тип</span>
                 <div className="grid grid-cols-2 gap-2 rounded-lg bg-surface p-1">
-                  {([
-                    ['daily', 'Ежедневная'],
-                    ['once', 'Разовая'],
-                  ] as Array<[GoalFrequency, string]>).map(([value, label]) => (
+                  {([['daily', 'Ежедневная'], ['once', 'Разовая']] as Array<[GoalFrequency, string]>).map(([v, l]) => (
                     <button
-                      key={value}
+                      key={v}
                       type="button"
-                      onClick={() => setFormData({ ...formData, type: value })}
+                      onClick={() => setFormData({ ...formData, type: v })}
                       className={`rounded-md px-3 py-2.5 text-sm font-medium transition-all ${
-                        formData.type === value
-                          ? 'bg-accent text-white shadow-red-soft'
-                          : 'text-zinc-500 hover:text-zinc-300'
+                        formData.type === v ? 'bg-accent text-white shadow-red-soft' : 'text-zinc-500'
                       }`}
                     >
-                      {label}
+                      {l}
                     </button>
                   ))}
                 </div>
@@ -414,7 +450,7 @@ export function Dashboard({
                 <input
                   type="time"
                   value={formData.time}
-                  onChange={(event) => setFormData({ ...formData, time: event.target.value })}
+                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
                   className="w-full rounded-lg border border-white/10 bg-surface px-3.5 py-3 text-sm text-zinc-100 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"
                 />
               </label>
@@ -423,7 +459,7 @@ export function Dashboard({
                 <span className="mb-1.5 block text-[11px] font-semibold text-zinc-400">Зачем?</span>
                 <textarea
                   value={formData.why}
-                  onChange={(event) => setFormData({ ...formData, why: event.target.value })}
+                  onChange={(e) => setFormData({ ...formData, why: e.target.value })}
                   placeholder="Ваша мотивация"
                   rows={2}
                   className="w-full resize-none rounded-lg border border-white/10 bg-surface px-3.5 py-3 text-sm text-zinc-100 placeholder:text-zinc-700 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent/30"

@@ -237,6 +237,43 @@ export function StatusBadge({
   );
 }
 
+export function UnderlineTabs<T extends string>({
+  value,
+  options,
+  onChange,
+  className,
+}: {
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+  className?: string;
+}) {
+  return (
+    <div className={classes('flex border-b border-white/[0.07]', className)}>
+      {options.map((option) => {
+        const selected = option.value === value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            aria-selected={selected}
+            className={classes(
+              'relative px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.06em] transition-colors',
+              selected ? 'text-accent' : 'text-zinc-600 hover:text-zinc-400'
+            )}
+          >
+            {option.label}
+            {selected && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full bg-accent shadow-red-soft" />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ProgressRing({
   value,
   size = 64,
