@@ -2,7 +2,7 @@ export type GoalFrequency = 'daily' | 'once';
 export type GoalType = 'daily' | 'once';
 export type GoalLogStatus = 'done' | 'skipped' | 'frozen';
 export type GoalDisplayStatus = GoalLogStatus | 'overdue';
-export type ProgramCode = 'fitness' | 'running' | 'sleep' | 'reading';
+export type ProgramCode = 'fitness' | 'running' | 'sleep' | 'reading' | 'home_year';
 export type ProgramDayType = 'workout' | 'cardio' | 'rest' | 'stretch';
 
 export interface User {
