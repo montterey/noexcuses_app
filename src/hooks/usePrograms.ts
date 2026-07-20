@@ -3,26 +3,41 @@ import { supabase } from '../lib/supabase';
 import { useUser } from '../contexts/UserContext';
 import { Program, ProgramCode, ProgramCompletionResult } from '../types';
 
-const PROGRAM_TEMPLATES = {
+const PROGRAM_TEMPLATES: Record<ProgramCode, {
+  title: string;
+  description: string;
+  icon: string;
+  totalDays: number;
+}> = {
   fitness: {
     title: '30-дневная физподготовка',
     description: 'Ежедневные тренировки для силы и выносливости',
     icon: '🏋️',
+    totalDays: 30,
   },
   running: {
     title: '30 дней бега',
     description: 'От первого километра до 5 км без остановок',
     icon: '🏃',
+    totalDays: 30,
   },
   sleep: {
     title: '30 дней качественного сна',
     description: 'Режим, ритуалы и глубокий восстанавливающий сон',
     icon: '💤',
+    totalDays: 30,
   },
   reading: {
     title: '30 дней чтения',
     description: 'Читай каждый день и прочитай книгу за месяц',
     icon: '📖',
+    totalDays: 30,
+  },
+  home_year: {
+    title: 'Год домашних тренировок',
+    description: '52 недели и 208 тренировок без инвентаря',
+    icon: '🏠',
+    totalDays: 208,
   },
 };
 
@@ -62,21 +77,21 @@ export function usePrograms() {
 
       setPrograms(
         (data || []).map((program) => {
-          const template = PROGRAM_TEMPLATES[
-            program.program_code as keyof typeof PROGRAM_TEMPLATES
-          ] || {
+          const code = program.program_code as ProgramCode;
+          const template = PROGRAM_TEMPLATES[code] || {
             title: program.program_code,
             description: '',
             icon: '🎯',
+            totalDays: 30,
           };
 
           return {
             id: program.id,
-            code: program.program_code as ProgramCode,
+            code,
             title: template.title,
             description: template.description,
             icon: template.icon,
-            totalDays: 30,
+            totalDays: template.totalDays,
             currentDay: program.current_day || 1,
             isActive: program.active,
             completed: Boolean(program.completed),
@@ -105,17 +120,21 @@ export function usePrograms() {
       return { success: false, error: 'Telegram initData is missing' };
     }
 
-    const response = await fetch('/api/rewards', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'completeProgramDay',
-        initData,
-        programCode,
-        programId,
-        expectedDay,
-      }),
-    });
+    const isAnnualHomeProgram = programCode === 'home_year';
+    const response = await fetch(
+      isAnnualHomeProgram ? '/api/annual-program' : '/api/rewards',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'completeProgramDay',
+          initData,
+          programCode,
+          programId,
+          expectedDay,
+        }),
+      }
+    );
 
     const payload = await response.json().catch(() => ({})) as ProgramCompletionApiResponse;
 
