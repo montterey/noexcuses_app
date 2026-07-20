@@ -9,6 +9,12 @@ import {
   ProgramExercise,
 } from '../types';
 import { ProgramDetail } from './ProgramDetail';
+import { AnnualProgramDetail } from './AnnualProgramDetail';
+import {
+  AnnualHomeSession,
+  ANNUAL_HOME_TOTAL_SESSIONS,
+  getAnnualHomeSession,
+} from '../data/annualHomeProgram';
 import { supabase } from '../lib/supabase';
 
 interface ProgramsProps {
@@ -17,18 +23,22 @@ interface ProgramsProps {
   onStartNewProgram: (code: ProgramCode) => Promise<ProgramCompletionResult>;
 }
 
-const ALL_PROGRAMS: Array<{
+interface ProgramTemplate {
   code: ProgramCode;
   title: string;
   description: string;
   longDescription: string;
   result: string;
+  resultLabel: string;
   difficulty: string;
   duration: string;
   format: string;
   icon: string;
   accent: string;
-}> = [
+  totalDays: number;
+}
+
+const ALL_PROGRAMS: ProgramTemplate[] = [
   {
     code: 'fitness',
     title: '30-дневная физподготовка',
@@ -36,11 +46,13 @@ const ALL_PROGRAMS: Array<{
     longDescription:
       'Базовая программа для тела: силовые упражнения, кардио, растяжка и восстановление. Подходит, чтобы втянуться в регулярные тренировки без сложного инвентаря.',
     result: 'Сильнее тело, больше энергии и привычка тренироваться',
+    resultLabel: 'Результат через 30 дней',
     difficulty: 'Средняя',
     duration: '10–25 мин/день',
     format: 'Силовые + кардио + растяжка',
     icon: '💪',
     accent: 'from-orange-500/25 to-red-500/10',
+    totalDays: 30,
   },
   {
     code: 'running',
@@ -49,11 +61,13 @@ const ALL_PROGRAMS: Array<{
     longDescription:
       'Программа для новичка: разминка, лёгкие интервалы бег/ходьба, техника, заминка и растяжка. Нагрузка растёт постепенно, чтобы не перегореть и не перегрузиться.',
     result: 'Выносливость, уверенность в беге и регулярное кардио',
+    resultLabel: 'Результат через 30 дней',
     difficulty: 'Лёгкая → средняя',
     duration: '15–35 мин/день',
     format: 'Бег, ходьба, техника, восстановление',
     icon: '🏃',
     accent: 'from-red-500/25 to-orange-500/10',
+    totalDays: 30,
   },
   {
     code: 'sleep',
@@ -62,11 +76,13 @@ const ALL_PROGRAMS: Array<{
     longDescription:
       'Программа помогает стабилизировать режим сна: убрать телефон перед сном, добавить дыхание, растяжку, утренний свет и простые вечерние ритуалы.',
     result: 'Лучшее засыпание, стабильный режим и больше восстановления',
+    resultLabel: 'Результат через 30 дней',
     difficulty: 'Лёгкая',
     duration: '5–20 мин/день',
     format: 'Задания + дыхание + растяжка + дневник сна',
     icon: '😴',
     accent: 'from-blue-500/25 to-purple-500/10',
+    totalDays: 30,
   },
   {
     code: 'reading',
@@ -75,11 +91,28 @@ const ALL_PROGRAMS: Array<{
     longDescription:
       'Программа не просто заставляет читать. Она учит выбирать книгу, читать сфокусированно, делать заметки, пересказывать идеи и закреплять понимание.',
     result: 'Привычка чтения, концентрация и лучшее запоминание',
+    resultLabel: 'Результат через 30 дней',
     difficulty: 'Лёгкая',
     duration: '10–25 мин/день',
     format: 'Чтение + заметки + пересказ + фокус-сессии',
     icon: '📚',
     accent: 'from-green-500/25 to-emerald-500/10',
+    totalDays: 30,
+  },
+  {
+    code: 'home_year',
+    title: 'Год домашних тренировок',
+    description: '52 недели и 208 тренировок без инвентаря',
+    longDescription:
+      'Отдельная годовая программа из загруженного плана: четыре тренировки в неделю по сплиту A/B/C/D, восемь последовательных фаз и регулярные разгрузочные недели. Основной акцент — спина, бицепс, трицепс, запястья, пресс и ноги.',
+    result: 'Сила всего тела, мышечная выносливость и устойчивая привычка тренироваться',
+    resultLabel: 'Результат за 52 недели',
+    difficulty: 'Средняя → продвинутая',
+    duration: '20–45 мин, 4 раза/нед.',
+    format: 'A/B/C/D · Пн/Вт/Чт/Пт · без инвентаря',
+    icon: '🏠',
+    accent: 'from-amber-500/25 to-orange-500/10',
+    totalDays: ANNUAL_HOME_TOTAL_SESSIONS,
   },
 ];
 
@@ -93,6 +126,7 @@ export function Programs({
     title: string;
     programId?: string;
     currentDay: number;
+    totalDays: number;
   } | null>(null);
 
   const [dayContent, setDayContent] = useState<ProgramDayContent | null>(null);
@@ -130,10 +164,10 @@ export function Programs({
   };
 
   const openProgram = async (
-    template: (typeof ALL_PROGRAMS)[number],
+    template: ProgramTemplate,
     userProgram?: Program
   ) => {
-    if (template.code === 'running' && userProgram?.completed) return;
+    if (userProgram?.completed) return;
 
     const currentDay = userProgram?.currentDay || 1;
     const requestId = contentRequestId.current + 1;
@@ -144,6 +178,7 @@ export function Programs({
       title: template.title,
       programId: userProgram?.id,
       currentDay,
+      totalDays: template.totalDays,
     });
     setDayContent(null);
     setContentError(null);
@@ -152,6 +187,14 @@ export function Programs({
     setContentLoading(true);
 
     try {
+      if (template.code === 'home_year') {
+        const annualSession = getAnnualHomeSession(currentDay);
+        if (!annualSession) throw new Error('Annual program content not found');
+        if (requestId !== contentRequestId.current) return;
+        setDayContent(annualSession);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('program_content')
         .select('day_number, title, type, exercises')
@@ -174,7 +217,11 @@ export function Programs({
 
       if (requestId === contentRequestId.current) {
         setDayContent(null);
-        setContentError('Контент этого дня пока недоступен');
+        setContentError(
+          template.code === 'home_year'
+            ? 'Контент этой тренировки пока недоступен'
+            : 'Контент этого дня пока недоступен'
+        );
       }
     } finally {
       if (requestId === contentRequestId.current) {
@@ -201,7 +248,7 @@ export function Programs({
         : await onStartNewProgram(selectedProgram.code);
 
       if (!result.success) {
-        setCompletionError(result.error || 'Не удалось завершить день программы');
+        setCompletionError(result.error || 'Не удалось завершить программу');
         return;
       }
 
@@ -213,7 +260,7 @@ export function Programs({
       closeProgram();
     } catch (error) {
       console.error('Error completing program day:', error);
-      setCompletionError('Не удалось завершить день программы');
+      setCompletionError('Не удалось сохранить результат');
     } finally {
       setIsCompleting(false);
     }
@@ -225,7 +272,7 @@ export function Programs({
         <div className="px-1">
           <h1 className="text-2xl font-bold mb-1">Программы</h1>
           <p className="text-gray-400 text-sm">
-            30-дневные челленджи с видео, заданиями и прогрессом
+            Пошаговые программы с заданиями, тренировками и прогрессом
           </p>
         </div>
 
@@ -235,14 +282,18 @@ export function Programs({
               (program) => program.code === template.code
             );
 
-            const progress = userProgram
-              ? Math.min(100, (userProgram.currentDay / 30) * 100)
-              : 0;
-
-            const isActive = Boolean(userProgram?.isActive);
-            const isCompletedRunning = template.code === 'running'
-              && Boolean(userProgram?.completed);
             const currentDay = userProgram?.currentDay || 0;
+            const progress = userProgram
+              ? Math.min(100, (currentDay / template.totalDays) * 100)
+              : 0;
+            const isActive = Boolean(userProgram?.isActive);
+            const isCompleted = Boolean(userProgram?.completed);
+            const progressLabel = template.code === 'home_year'
+              ? `Тренировка ${currentDay}/${template.totalDays} · Неделя ${Math.ceil(currentDay / 4)}/52`
+              : `День ${currentDay}/${template.totalDays}`;
+            const continueLabel = template.code === 'home_year'
+              ? `Продолжить: тренировка ${currentDay}`
+              : `Продолжить: день ${currentDay}`;
 
             return (
               <div
@@ -308,7 +359,7 @@ export function Programs({
 
                   <div className="rounded-xl bg-accent/10 border border-accent/20 p-3 mb-4">
                     <p className="text-accent text-xs font-medium mb-1">
-                      Результат через 30 дней
+                      {template.resultLabel}
                     </p>
                     <p className="text-gray-200 text-sm">
                       {template.result}
@@ -320,7 +371,7 @@ export function Programs({
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-gray-400 text-xs">Прогресс</span>
                         <span className="text-white text-xs font-medium">
-                          День {currentDay}/30
+                          {progressLabel}
                         </span>
                       </div>
 
@@ -335,21 +386,21 @@ export function Programs({
 
                   <button
                     onClick={() => openProgram(template, userProgram)}
-                    disabled={isCompletedRunning}
+                    disabled={isCompleted}
                     className={`w-full py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 active:scale-95 ${
-                      isCompletedRunning
+                      isCompleted
                         ? 'bg-surface text-green-400 border border-green-400/20 cursor-default active:scale-100'
                         : isActive
                         ? 'bg-surface-light text-white border border-white/10'
                         : 'bg-accent text-white'
                     }`}
                   >
-                    {isCompletedRunning
+                    {isCompleted
                       ? 'Программа завершена'
                       : isActive
-                        ? `Продолжить: день ${currentDay}`
+                        ? continueLabel
                         : 'Начать программу'}
-                    {!isCompletedRunning && <ChevronRight size={18} />}
+                    {!isCompleted && <ChevronRight size={18} />}
                   </button>
                 </div>
               </div>
@@ -359,19 +410,35 @@ export function Programs({
       </div>
 
       {selectedProgram && (
-        <ProgramDetail
-          programCode={selectedProgram.code}
-          programTitle={selectedProgram.title}
-          currentDay={selectedProgram.currentDay}
-          dayContent={dayContent}
-          contentLoading={contentLoading}
-          contentError={contentError}
-          completionError={completionError}
-          completionAlreadySaved={completionAlreadySaved}
-          isCompleting={isCompleting}
-          onClose={closeProgram}
-          onCompleteDay={handleCompleteDay}
-        />
+        selectedProgram.code === 'home_year' ? (
+          <AnnualProgramDetail
+            programTitle={selectedProgram.title}
+            currentDay={selectedProgram.currentDay}
+            totalDays={selectedProgram.totalDays}
+            dayContent={dayContent as AnnualHomeSession | null}
+            contentLoading={contentLoading}
+            contentError={contentError}
+            completionError={completionError}
+            completionAlreadySaved={completionAlreadySaved}
+            isCompleting={isCompleting}
+            onClose={closeProgram}
+            onCompleteDay={handleCompleteDay}
+          />
+        ) : (
+          <ProgramDetail
+            programCode={selectedProgram.code}
+            programTitle={selectedProgram.title}
+            currentDay={selectedProgram.currentDay}
+            dayContent={dayContent}
+            contentLoading={contentLoading}
+            contentError={contentError}
+            completionError={completionError}
+            completionAlreadySaved={completionAlreadySaved}
+            isCompleting={isCompleting}
+            onClose={closeProgram}
+            onCompleteDay={handleCompleteDay}
+          />
+        )
       )}
     </>
   );
